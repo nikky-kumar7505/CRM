@@ -81,7 +81,7 @@ const ComingSoon = ({ title }) => (
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
         <Routes>
 
           {/* ─── Public Routes ──────────────────────────────── */}
