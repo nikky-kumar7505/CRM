@@ -1,0 +1,35 @@
+:root {
+    /* ─── Theme Colors (matching your other project) ────────── */
+    --theme-color: #10443e;
+    --theme-color2: #d4af37;
+    --theme-color3: #f7e7ce;
+    --theme-color4: #dcdcdc;
+  
+    /* ─── Text Colors ───────────────────────────────────────── */
+    --title-color: #121212;
+    --title-color2: #ffffff;
+    --body-color: #797e88;
+  
+    /* ─── Background Colors ─────────────────────────────────── */
+    --smoke-color: #d8dde1;
+    --smoke-color2: #f8f8f8;
+    --white-color: #ffffff;
+    --black-color: #000000;
+  
+    /* ─── Status Colors ─────────────────────────────────────── */
+    --success-color: #28a745;
+    --error-color: #dc3545;
+    --warning-color: #ffb539;
+    --info-color: #0dcaf0;
+  
+    /* ─── Fonts ─────────────────────────────────────────────── */
+    --title-font: "Space Grotesk", sans-serif;
+    --body-font: "Kanit", sans-serif;
+  
+    /* ─── Layout ────────────────────────────────────────────── */
+    --sidebar-width: 260px;
+    --header-height: 65px;
+    --border-radius: 8px;
+    --box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    --transition: all 0.3s ease;
+  }

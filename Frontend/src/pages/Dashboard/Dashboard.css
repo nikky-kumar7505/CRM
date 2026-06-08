@@ -1,0 +1,11 @@
+.dashboard-date {
+    font-size: 13px;
+    color: var(--body-color);
+  }
+  
+  .section-title {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 14px;
+    color: var(--theme-color);
+  }
