@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://nikky-kumar7505.github.io/CRM",
+  "homepage": "https://nikky-kumar7505.github.io/CRM-Frontend",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

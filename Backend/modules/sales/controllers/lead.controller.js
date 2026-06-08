@@ -634,6 +634,7 @@ export const getLeadStats = async (req, res) => {
 
 
 // ─── Upload CSV Leads ─────────────────────────────────────────────────────────
+// ─── Upload CSV Leads ─────────────────────────────────────────────────────────
 export const uploadCSVLeads = async (req, res) => {
   try {
     if (!req.file) {
@@ -645,7 +646,9 @@ export const uploadCSVLeads = async (req, res) => {
 
     // Parse CSV from buffer
     const csvContent = req.file.buffer.toString("utf8");
-    const lines = csvContent.split("\n").filter((line) => line.trim() !== "");
+    const lines = csvContent
+      .split(/\r?\n/)
+      .filter((line) => line.trim() !== "");
 
     if (lines.length < 2) {
       return res.status(400).json({
@@ -668,6 +671,19 @@ export const uploadCSVLeads = async (req, res) => {
       is_active: true,
     }).lean();
 
+    // ─── Get starting lead number ONCE before loop ───────────
+    const lastLead = await Lead.findOne({}, { lead_id: 1 })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    let leadNumber = 1;
+    if (lastLead && lastLead.lead_id) {
+      const lastNum = parseInt(lastLead.lead_id.replace("LEAD-", ""));
+      if (!isNaN(lastNum)) {
+        leadNumber = lastNum + 1;
+      }
+    }
+
     // Process each row
     for (let i = 1; i < lines.length; i++) {
       try {
@@ -682,43 +698,63 @@ export const uploadCSVLeads = async (req, res) => {
           continue;
         }
 
-        // Generate lead ID
-        const existingCount = await Lead.countDocuments();
-        const createdCount = createdLeads.length;
-        const totalCount = existingCount + createdCount;
-        const lead_id = `LEAD-${String(totalCount + 1).padStart(4, "0")}`;
+        // ─── Generate UNIQUE lead ID for each iteration ─────
+        const lead_id = `LEAD-${String(leadNumber).padStart(4, "0")}`;
+        leadNumber++; // increment for next lead
 
-        // Auto assign
+        // ─── Convert contact number (handles scientific notation) ──
+        let contactNumber =
+          rowData.contact_number || rowData.phone || rowData.mobile || "";
+
+        // If number is in scientific notation like 9.88E+09
+        if (contactNumber.includes("E") || contactNumber.includes("e")) {
+          contactNumber = Number(contactNumber).toFixed(0);
+        }
+        contactNumber = String(contactNumber).replace(/[^\d]/g, "");
+
+        // ─── Auto assign to least busy qualifier ────────────
         let assigned_to = null;
         let assigned_to_name = null;
 
         if (qualifiers.length > 0) {
           const qualifierLeadCounts = await Promise.all(
             qualifiers.map(async (q) => {
-              const count = await Lead.countDocuments({ assigned_to: q._id });
-              return { ...q, leadCount: count + createdLeads.filter(
-                (l) => l.assigned_to?.toString() === q._id.toString()
-              ).length };
+              const dbCount = await Lead.countDocuments({
+                assigned_to: q._id,
+              });
+              const newCount = createdLeads.filter(
+                (l) =>
+                  l.assigned_to &&
+                  l.assigned_to.toString() === q._id.toString()
+              ).length;
+              return { ...q, leadCount: dbCount + newCount };
             })
           );
+
           const leastBusy = qualifierLeadCounts.reduce((prev, curr) =>
             prev.leadCount <= curr.leadCount ? prev : curr
           );
+
           assigned_to = leastBusy._id;
           assigned_to_name = leastBusy.name;
         }
 
+        // ─── Create lead ────────────────────────────────────
         const lead = await Lead.create({
           lead_id,
-          lead_name: rowData.lead_name || rowData.name || "",
-          contact_number: rowData.contact_number || rowData.phone || rowData.mobile || "",
+          lead_name: rowData.lead_name || rowData.name || "Unknown",
+          contact_number: contactNumber,
           email: rowData.email || "",
-          business_type: rowData.business_type || "other",
+          business_type: "other",
           business_name: rowData.business_name || rowData.company || "",
           lead_source: rowData.lead_source || rowData.source || "other",
           city: rowData.city || "",
           state: rowData.state || "",
-          requirements: rowData.requirements || rowData.service || "",
+          requirements:
+            rowData.service_type ||
+            rowData.requirements ||
+            rowData.service ||
+            "",
           priority: rowData.priority || "medium",
           assigned_to,
           assigned_to_name,
@@ -763,6 +799,7 @@ export const uploadCSVLeads = async (req, res) => {
     });
   }
 };
+
 
 // ─── Bulk Update Leads Status ─────────────────────────────────────────────────
 export const bulkUpdateLeads = async (req, res) => {
