@@ -29,7 +29,7 @@ router.get("/stats", getDealStats);
 router
   .route("/")
   .get(getAllDeals) // All roles (filtered inside)
-  .post(managerOrAdmin, createDeal); // Manager or Admin creates deal
+  .post(managerOrAdmin("admin", "sales_manager"), createDeal); // Manager or Admin creates deal
 
 router
   .route("/:id")

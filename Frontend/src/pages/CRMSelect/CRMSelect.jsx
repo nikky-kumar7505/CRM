@@ -33,6 +33,19 @@ const CRMSelect = () => {
       path: "/sales/dashboard",
     },
     {
+      id: "daily_report",
+      name: "Daily Report",
+      description:
+        "Manage leads, assign qualifiers, track deals and close clients through complete sales pipeline.",
+      icon: <FiActivity />,
+      iconColor: "#10443E",
+      iconBg: "#e8f5f3",
+      active: true,
+      badge: "Active",
+      badgeClass: "badge-active",
+      path: "/daily/",
+    },
+    {
       id: "attendance",
       name: "Attendance CRM",
       description:

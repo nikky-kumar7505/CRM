@@ -1,0 +1,39 @@
+.template-builder {
+  max-width: 1100px;
+}
+
+.template-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.template-field-card {
+  border: 1px solid var(--smoke-color);
+  border-radius: var(--border-radius);
+  padding: 20px;
+  background: var(--white-color);
+}
+
+.template-field-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.template-field-header h3 {
+  font-size: 16px;
+}
+
+.template-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 24px;
+}
+
+.template-field-card small {
+  display: block;
+  margin-top: 6px;
+  color: var(--body-color);
+}

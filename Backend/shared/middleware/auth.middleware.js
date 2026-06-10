@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../models/user.model.js";
+import { resolveUserAccessProfile } from "../utils/role.utils.js";
 
 // ─── Protect Route - Check if user is logged in ───────────────────────────────
 const protect = async (req, res, next) => {
@@ -42,8 +43,11 @@ const protect = async (req, res, next) => {
       });
     }
 
+    const accessProfile = await resolveUserAccessProfile(user);
+
     // Attach user to request
     req.user = user;
+    req.accessProfile = accessProfile;
     next();
   } catch (error) {
     return res.status(401).json({
@@ -59,8 +63,10 @@ const checkCRMAccess = (crmName) => {
     // Admin always has access to everything
     if (req.user.role === "admin") return next();
 
+    const allowedModules = req.accessProfile?.allowedModules || req.user.crm_access || [];
+
     // Check if user has access to this crm
-    if (!req.user.crm_access.includes(crmName)) {
+    if (!allowedModules.includes(crmName)) {
       return res.status(403).json({
         success: false,
         message: `You do not have access to the ${crmName} module.`,

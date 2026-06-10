@@ -33,6 +33,6 @@ router.delete("/users/:id", protect, adminOnly, deleteUser);
 router.put("/users/:id/change-password", protect, adminOnly, changeUserPassword);
 
 // ─── Admin and Sales Manager Routes ──────────────────────────────────────────
-router.get("/users", protect, managerOrAdmin, getAllUsers);
+router.get("/users", protect, managerOrAdmin("admin", "sales_manager"), getAllUsers);
 
 export default router;

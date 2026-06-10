@@ -58,7 +58,7 @@ router.put(
 
 router.post(
   "/csv-upload",
-  managerOrAdmin,
+  managerOrAdmin("admin", "sales_manager"),
   upload.single("csv_file"),
   uploadCSVLeads
 );
@@ -67,7 +67,7 @@ router.post(
 router
   .route("/")
   .get(getAllLeads)
-  .post(managerOrAdmin, createLead);
+  .post(managerOrAdmin("admin", "sales_manager"), createLead);
 
 router
   .route("/:id")
@@ -76,10 +76,10 @@ router
     authorizeRoles("admin", "sales_manager", "lead_qualifier"),
     updateLead
   )
-  .delete(managerOrAdmin, deleteLead);
+  .delete(managerOrAdmin("admin", "sales_manager"), deleteLead);
 
-// ─── Special ──────────────────────────────────────────────
-router.put("/:id/assign", managerOrAdmin, assignLead);
+// ─── Special Routes ───────────────────────────────────────
+router.put("/:id/assign", managerOrAdmin("admin", "sales_manager"), assignLead);
 router.post(
   "/:id/call-log",
   authorizeRoles("admin", "sales_manager", "lead_qualifier"),

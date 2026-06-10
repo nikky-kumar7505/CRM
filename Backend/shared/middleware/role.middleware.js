@@ -23,14 +23,33 @@ const adminOnly = (req, res, next) => {
 };
 
 // ─── Sales Manager or Admin ───────────────────────────────────────────────────
-const managerOrAdmin = (req, res, next) => {
-  if (!["admin", "sales_manager"].includes(req.user.role)) {
-    return res.status(403).json({
-      success: false,
-      message: "Only Sales Manager or Admin can access this resource.",
-    });
-  }
-  next();
+const managerOrAdmin = (...roles) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: `Only ${roles.join(", ")} can access this resource.`,
+      });
+    }
+
+    next();
+  };
 };
 
-export { authorizeRoles, adminOnly, managerOrAdmin };
+const requireManagerOrAdmin = (req, res, next) => {
+  if (req.user.role === "admin" || req.accessProfile?.isManager) {
+    return next();
+  }
+
+  return res.status(403).json({
+    success: false,
+    message: "Only managers or admin can access this resource.",
+  });
+};
+
+export {
+  authorizeRoles,
+  adminOnly,
+  managerOrAdmin,
+  requireManagerOrAdmin,
+};

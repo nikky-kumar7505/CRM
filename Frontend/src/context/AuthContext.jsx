@@ -1,12 +1,23 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { getMeApi } from "../api/authApi.js";
+import { hasModuleAccess, isManagerUser } from "../config/access.config.js";
 
 const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    const storedUser = localStorage.getItem("user");
+    if (!storedUser) return null;
+
+    try {
+      return JSON.parse(storedUser);
+    } catch (error) {
+      localStorage.removeItem("user");
+      return null;
+    }
+  });
   const [token, setToken] = useState(localStorage.getItem("token") || null);
   const [loading, setLoading] = useState(true);
 
@@ -17,6 +28,7 @@ export const AuthProvider = ({ children }) => {
         try {
           const res = await getMeApi();
           setUser(res.data.data);
+          localStorage.setItem("user", JSON.stringify(res.data.data));
         } catch (error) {
           console.error("Failed to load user:", error);
           logout();
@@ -52,10 +64,10 @@ export const AuthProvider = ({ children }) => {
 
   // ─── Check CRM Access ────────────────────────────────────
   const hasCRMAccess = (crm) => {
-    if (!user) return false;
-    if (user.role === "admin") return true;
-    return user.crm_access?.includes(crm);
+    return hasModuleAccess(user, crm);
   };
+
+  const isManager = () => isManagerUser(user);
 
   return (
     <AuthContext.Provider
@@ -67,6 +79,7 @@ export const AuthProvider = ({ children }) => {
         logout,
         hasRole,
         hasCRMAccess,
+        isManager,
       }}
     >
       {children}

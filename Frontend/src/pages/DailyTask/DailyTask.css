@@ -1,0 +1,128 @@
+.daily-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.daily-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+
+.daily-summary-card h3,
+.daily-section-title {
+  margin-bottom: 12px;
+}
+
+.daily-meta {
+  color: var(--body-color);
+  font-size: 13px;
+}
+
+.daily-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.daily-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.daily-form-grid .full-width {
+  grid-column: 1 / -1;
+}
+
+.daily-timeline {
+  display: grid;
+  gap: 10px;
+}
+
+.daily-timeline-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+}
+
+.daily-kv-list {
+  display: grid;
+  gap: 10px;
+}
+
+.daily-kv-item {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f9fafb;
+  border: 1px solid #edf2f7;
+}
+
+.daily-kv-item strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.daily-panel {
+  display: grid;
+  gap: 20px;
+}
+
+.daily-table-link {
+  color: var(--theme-color);
+  font-weight: 500;
+}
+
+.tab-list {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.tab-button {
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: white;
+  border: 1px solid var(--smoke-color);
+  color: var(--body-color);
+}
+
+.tab-button.active {
+  background: var(--theme-color);
+  color: white;
+  border-color: var(--theme-color);
+}
+
+.checkbox-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.inline-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #eef7f6;
+  border: 1px solid rgba(16, 68, 62, 0.12);
+  border-radius: 999px;
+}
+
+@media (max-width: 768px) {
+  .daily-timeline-item {
+    flex-direction: column;
+  }
+}

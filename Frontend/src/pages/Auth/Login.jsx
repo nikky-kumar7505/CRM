@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useNavigate, Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
+import { FiEye, FiEyeOff } from "react-icons/fi";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { loginApi } from "../../api/authApi.js";
-import { FiEye, FiEyeOff } from "react-icons/fi";
+import { getLandingPath } from "../../config/access.config.js";
 import "./Login.css";
 
 const Login = () => {
@@ -15,37 +16,27 @@ const Login = () => {
   const { login, token, user } = useAuth();
   const navigate = useNavigate();
 
-  // ─── If already logged in redirect ───────────────────────
   if (token && user) {
-    if (user.role === "admin") {
-      return <Navigate to="/crm-select" />;
-    }
-    return <Navigate to="/sales/dashboard" />;
+    return <Navigate to={getLandingPath(user)} replace />;
   }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(""); // clear previous error
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError("");
     setLoading(true);
 
     try {
-      const res = await loginApi({ email, password });
+      const response = await loginApi({ email, password });
 
-      if (res.data.success) {
-        login(res.data.token, res.data.data);
-        if (res.data.data.role === "admin") {
-          navigate("/crm-select");
-        } else {
-          navigate("/sales/dashboard");
-        }
+      if (response.data.success) {
+        login(response.data.token, response.data.data);
+        navigate(getLandingPath(response.data.data), { replace: true });
       }
-    } catch (err) {
-      // ✅ Error stays on screen - no page refresh
+    } catch (requestError) {
       setError(
-        err.response?.data?.message ||
+        requestError.response?.data?.message ||
           "Login failed. Please check your email and password."
       );
-      setLoading(false);
     } finally {
       setLoading(false);
     }
@@ -60,7 +51,6 @@ const Login = () => {
           <p>Sign in to your account</p>
         </div>
 
-        {/* ✅ Error stays visible - does not disappear */}
         {error && (
           <div className="login-error">
             <span>⚠️ {error}</span>
@@ -88,7 +78,7 @@ const Login = () => {
               className="form-input"
               placeholder="Enter your email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(event) => setEmail(event.target.value)}
               required
               autoComplete="email"
             />
@@ -96,14 +86,13 @@ const Login = () => {
 
           <div className="form-group">
             <label className="form-label">Password</label>
-            {/* ✅ Eye button on password field */}
             <div style={{ position: "relative" }}>
               <input
                 type={showPassword ? "text" : "password"}
                 className="form-input"
                 placeholder="Enter your password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(event) => setPassword(event.target.value)}
                 required
                 autoComplete="current-password"
                 style={{ paddingRight: "45px" }}
@@ -130,13 +119,16 @@ const Login = () => {
             </div>
           </div>
 
-          <button
-            type="submit"
-            className="login-btn"
-            disabled={loading}
-          >
+          <button type="submit" className="login-btn" disabled={loading}>
             {loading ? (
-              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
+              <span
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                }}
+              >
                 <span className="login-spinner"></span>
                 Signing in...
               </span>

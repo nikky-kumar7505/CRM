@@ -1,6 +1,14 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import User from "../models/user.model.js";
+import Role from "../models/role.model.js";
+import {
+  buildCrmAccess,
+  buildRoleProfile,
+  getDefaultRoleConfig,
+  resolveRoleProfileByKey,
+  resolveUserAccessProfile,
+} from "../utils/role.utils.js";
 
 // ─── Generate Token ───────────────────────────────────────────────────────────
 const generateToken = (id) => {
@@ -9,10 +17,59 @@ const generateToken = (id) => {
   });
 };
 
+const buildUserResponse = async (userDoc) => {
+  const roleProfile = await resolveUserAccessProfile(userDoc);
+
+  return {
+    _id: userDoc._id,
+    name: userDoc.name,
+    email: userDoc.email,
+    role: userDoc.role,
+    employee_id: userDoc.employee_id,
+    crm_access: buildCrmAccess(roleProfile, userDoc.crm_access),
+    department: userDoc.department || roleProfile.department,
+    profile_image: userDoc.profile_image,
+    phone: userDoc.phone,
+    managed_by: userDoc.managed_by,
+    role_label: roleProfile.label,
+    allowedModules: roleProfile.allowedModules,
+    landingPath:
+      userDoc.role === "admin" ? "/crm-select" : roleProfile.landingPath,
+    isManager: roleProfile.isManager,
+  };
+};
+
+const resolveRoleForMutation = async (roleKey, fallbackUser = null) => {
+  const normalizedRole = String(roleKey || fallbackUser?.role || "")
+    .trim()
+    .toLowerCase();
+
+  const role = await Role.findOne({ key: normalizedRole });
+  const roleProfile = await resolveRoleProfileByKey(normalizedRole, fallbackUser);
+
+  if (!role && !getDefaultRoleConfig(normalizedRole)) {
+    return null;
+  }
+
+  return {
+    role,
+    roleProfile,
+  };
+};
+
 // ─── Register User ────────────────────────────────────────────────────────────
 const registerUser = async (req, res) => {
   try {
-    const { name, email, password, role, phone, department, managed_by } = req.body;
+    const {
+      name,
+      email,
+      password,
+      role,
+      phone,
+      department,
+      managed_by,
+      crm_access,
+    } = req.body;
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -25,37 +82,39 @@ const registerUser = async (req, res) => {
     const count = await User.countDocuments();
     const employee_id = `SW-SAL${String(count + 1).padStart(4, "0")}`;
 
-    let crm_access = ["sales"];
-    if (role === "admin") {
-      crm_access = ["sales", "attendance"];
+    const resolvedRole = await resolveRoleForMutation(role);
+    if (!resolvedRole) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid role selected.",
+      });
     }
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
+    const resolvedDepartment =
+      department || resolvedRole.roleProfile.department;
+    const resolvedCrmAccess =
+      Array.isArray(crm_access) && crm_access.length > 0
+        ? crm_access
+        : buildCrmAccess(resolvedRole.roleProfile);
 
     const user = await User.create({
       name,
       email,
       password: hashedPassword,
-      role,
+      role: resolvedRole.roleProfile.key,
       phone,
-      department,
-      managed_by,
+      department: resolvedDepartment,
+      managed_by: managed_by || null,
       employee_id,
-      crm_access,
+      crm_access: resolvedCrmAccess,
     });
 
     res.status(201).json({
       success: true,
       message: "User created successfully.",
-      data: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        employee_id: user.employee_id,
-        crm_access: user.crm_access,
-      },
+      data: await buildUserResponse(user),
     });
   } catch (error) {
     res.status(500).json({
@@ -110,16 +169,7 @@ const loginUser = async (req, res) => {
       success: true,
       message: "Login successful.",
       token,
-      data: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        employee_id: user.employee_id,
-        crm_access: user.crm_access,
-        department: user.department,
-        profile_image: user.profile_image,
-      },
+      data: await buildUserResponse(user),
     });
   } catch (error) {
     res.status(500).json({
@@ -138,9 +188,15 @@ const getMe = async (req, res) => {
       "name email role"
     );
 
+    const serializedUser = user.toObject();
+    const userResponse = await buildUserResponse(serializedUser);
+
     res.status(200).json({
       success: true,
-      data: user,
+      data: {
+        ...serializedUser,
+        ...userResponse,
+      },
     });
   } catch (error) {
     res.status(500).json({
@@ -229,10 +285,21 @@ const getAllUsers = async (req, res) => {
       .populate("managed_by", "name email")
       .sort({ createdAt: -1 });
 
+    const hydratedUsers = await Promise.all(
+      users.map(async (user) => {
+        const plainUser = user.toObject();
+        const userResponse = await buildUserResponse(plainUser);
+        return {
+          ...plainUser,
+          ...userResponse,
+        };
+      })
+    );
+
     res.status(200).json({
       success: true,
-      count: users.length,
-      data: users,
+      count: hydratedUsers.length,
+      data: hydratedUsers,
     });
   } catch (error) {
     res.status(500).json({
@@ -246,7 +313,16 @@ const getAllUsers = async (req, res) => {
 // ─── Update User ──────────────────────────────────────────────────────────────
 const updateUser = async (req, res) => {
   try {
-    const { name, email, role, phone, is_active, department, managed_by, crm_access } = req.body;
+    const {
+      name,
+      email,
+      role,
+      phone,
+      is_active,
+      department,
+      managed_by,
+      crm_access,
+    } = req.body;
 
     const user = await User.findById(req.params.id);
     if (!user) {
@@ -256,14 +332,38 @@ const updateUser = async (req, res) => {
       });
     }
 
+    const hasRoleUpdate = Object.prototype.hasOwnProperty.call(req.body, "role");
+    const resolvedRole = hasRoleUpdate
+      ? await resolveRoleForMutation(role, user)
+      : await resolveRoleForMutation(user.role, user);
+
+    if (hasRoleUpdate && !resolvedRole) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid role selected.",
+      });
+    }
+
     if (name) user.name = name;
     if (email) user.email = email;
-    if (role) user.role = role;
-    if (phone) user.phone = phone;
+    if (hasRoleUpdate) user.role = resolvedRole.roleProfile.key;
+    if (phone !== undefined) user.phone = phone;
     if (is_active !== undefined) user.is_active = is_active;
-    if (department) user.department = department;
-    if (managed_by) user.managed_by = managed_by;
-    if (crm_access) user.crm_access = crm_access;
+    if (department !== undefined && department !== "") {
+      user.department = department;
+    } else if (hasRoleUpdate) {
+      user.department = resolvedRole.roleProfile.department;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "managed_by")) {
+      user.managed_by = managed_by || null;
+    }
+
+    if (Array.isArray(crm_access)) {
+      user.crm_access = crm_access;
+    } else if (hasRoleUpdate) {
+      user.crm_access = buildCrmAccess(resolvedRole.roleProfile);
+    }
 
     const updatedUser = await User.findByIdAndUpdate(
       req.params.id,
@@ -280,10 +380,16 @@ const updateUser = async (req, res) => {
       { new: true }
     );
 
+    const plainUpdatedUser = updatedUser.toObject();
+    const userResponse = await buildUserResponse(plainUpdatedUser);
+
     res.status(200).json({
       success: true,
       message: "User updated successfully.",
-      data: updatedUser,
+      data: {
+        ...plainUpdatedUser,
+        ...userResponse,
+      },
     });
   } catch (error) {
     res.status(500).json({
