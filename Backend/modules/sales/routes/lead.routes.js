@@ -11,6 +11,9 @@ import {
   getLeadStats,
   uploadCSVLeads,
   bulkUpdateLeads,
+  closeLeadByQualifier,
+  getFollowUpLeads,
+  getHotLeads,
 } from "../controllers/lead.controller.js";
 import {
   protect,
@@ -18,12 +21,10 @@ import {
 } from "../../../shared/middleware/auth.middleware.js";
 import {
   authorizeRoles,
-  adminOnly,
   managerOrAdmin,
 } from "../../../shared/middleware/role.middleware.js";
 import multer from "multer";
 
-// ─── Multer for CSV upload ────────────────────────────────
 const storage = multer.memoryStorage();
 const upload = multer({
   storage,
@@ -44,17 +45,17 @@ const router = express.Router();
 router.use(protect);
 router.use(checkCRMAccess("sales"));
 
-// ─── Stats ────────────────────────────────────────────────
+// ─── Stats and Special Routes ─────────────────────────────
 router.get("/stats", getLeadStats);
+router.get("/follow-up", getFollowUpLeads);
+router.get("/hot-leads", getHotLeads);
 
-// ─── Bulk Update (Lead Qualifier) ─────────────────────────
 router.put(
   "/bulk-update",
   authorizeRoles("admin", "sales_manager", "lead_qualifier"),
   bulkUpdateLeads
 );
 
-// ─── CSV Upload ───────────────────────────────────────────
 router.post(
   "/csv-upload",
   managerOrAdmin,
@@ -77,7 +78,7 @@ router
   )
   .delete(managerOrAdmin, deleteLead);
 
-// ─── Special Routes ───────────────────────────────────────
+// ─── Special ──────────────────────────────────────────────
 router.put("/:id/assign", managerOrAdmin, assignLead);
 router.post(
   "/:id/call-log",
@@ -88,6 +89,11 @@ router.put(
   "/:id/pass-to-closer",
   authorizeRoles("admin", "sales_manager", "lead_qualifier"),
   passLeadToCloser
+);
+router.put(
+  "/:id/close",
+  authorizeRoles("admin", "sales_manager", "lead_qualifier"),
+  closeLeadByQualifier
 );
 
 export default router;

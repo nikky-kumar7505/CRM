@@ -410,3 +410,15 @@ textarea {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+
+
+
+/* ✅ Modal closes on overlay click */
+.modal-overlay {
+  cursor: pointer;
+}
+
+.modal-content {
+  cursor: default;
+}

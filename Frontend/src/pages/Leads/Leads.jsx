@@ -84,43 +84,46 @@ const Leads = () => {
   const [selectedLead, setSelectedLead] = useState(null);
 
   const [formData, setFormData] = useState({
-    lead_name: "",
-    contact_number: "",
-    email: "",
-    service_type: "",   // frontend label only
-    requirements: "",
-    lead_source: "other",
-    priority: "medium",
-    city: "",
-    state: "",
-  });
+  lead_name: "",
+  contact_number: "",
+  email: "",
+  service_required: "",   // ✅ This stores the service type
+  requirements: "",        // (used for compatibility)
+  lead_source: "other",
+  priority: "medium",
+  city: "",
+  state: "",
+});
+  
 
   const [editFormData, setEditFormData] = useState({
-    lead_name: "",
-    contact_number: "",
-    email: "",
-    service_type: "",
-    requirements: "",
-    lead_source: "other",
-    priority: "medium",
-    current_stage: "new",
-    city: "",
-    state: "",
-    calling_status: "pending",
-    next_follow_up_date: "",
-    comment: "",
-    budget: "",
-    expected_closing_date: "",
-  });
+  lead_name: "",
+  contact_number: "",
+  email: "",
+  service_required: "",   // ✅ NEW
+  requirements: "",       // Detailed requirements (filled by qualifier)
+  lead_source: "other",
+  priority: "medium",
+  current_stage: "new",
+  city: "",
+  state: "",
+  calling_status: "pending",
+  next_follow_up_date: "",
+  comment: "",
+  budget: "",
+  expected_closing_date: "",
+});
 
   const [assignData, setAssignData] = useState({ qualifier_id: "" });
   const [callLogData, setCallLogData] = useState({
-    calling_status: "contacted",
-    comment: "",
-    requirements: "",
-    budget: "",
-    expected_closing_date: "",
-  });
+  calling_status: "interested",
+  comment: "",
+  requirements: "",
+  budget: "",
+  expected_closing_date: "",
+  priority: "",
+  next_follow_up_date: "",
+});
 
   useEffect(() => {
     fetchLeads();
@@ -242,63 +245,61 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
   };
 
   const openEditModal = (lead) => {
-    setSelectedLead(lead);
-    setEditFormData({
-      lead_name: lead.lead_name || "",
-      contact_number: lead.contact_number || "",
-      email: lead.email || "",
-      service_type: lead.service_type || lead.requirements || "",
-      requirements: lead.requirements || "",
-      lead_source: lead.lead_source || "other",
-      priority: lead.priority || "medium",
-      current_stage: lead.current_stage || "new",
-      city: lead.city || "",
-      state: lead.state || "",
-      calling_status: lead.calling_status || "pending",
-      next_follow_up_date: lead.next_follow_up_date
-        ? new Date(lead.next_follow_up_date).toISOString().split("T")[0]
-        : "",
-      comment: lead.comment || "",
-      budget: lead.budget || "",
-      expected_closing_date: lead.expected_closing_date
-        ? new Date(lead.expected_closing_date).toISOString().split("T")[0]
-        : "",
-    });
-    setShowEditModal(true);
-  };
+  setSelectedLead(lead);
+  setEditFormData({
+    lead_name: lead.lead_name || "",
+    contact_number: lead.contact_number || "",
+    email: lead.email || "",
+    service_required: lead.service_required || "",  // ✅ Pre-fill
+    requirements: lead.requirements || "",
+    lead_source: lead.lead_source || "other",
+    priority: lead.priority || "medium",
+    current_stage: lead.current_stage || "new",
+    city: lead.city || "",
+    state: lead.state || "",
+    calling_status: lead.calling_status || "pending",
+    next_follow_up_date: lead.next_follow_up_date
+      ? new Date(lead.next_follow_up_date).toISOString().split("T")[0]
+      : "",
+    comment: lead.comment || "",
+    budget: lead.budget || "",
+    expected_closing_date: lead.expected_closing_date
+      ? new Date(lead.expected_closing_date).toISOString().split("T")[0]
+      : "",
+  });
+  setShowEditModal(true);
+};
 
   const handleCreateLead = async (e) => {
-    e.preventDefault();
-    setAutoAssignInfo(null);
-    try {
-      // Map service_type to requirements for backend
-      const dataToSend = {
-        ...formData,
-        requirements: formData.service_type,
-        business_type: "other",
-      };
-      const res = await createLeadApi(dataToSend);
-      if (res.data.auto_assign_info) {
-        setAutoAssignInfo(res.data.auto_assign_info);
-      }
-      setShowCreateModal(false);
-      setFormData({
-        lead_name: "",
-        contact_number: "",
-        email: "",
-        service_type: "",
-        requirements: "",
-        lead_source: "other",
-        priority: "medium",
-        city: "",
-        state: "",
-      });
-      fetchLeads();
-    } catch (error) {
-      alert(error.response?.data?.message || "Error creating lead");
+  e.preventDefault();
+  setAutoAssignInfo(null);
+  try {
+    const dataToSend = {
+      ...formData,
+      service_required: formData.service_required,  // ✅ Send as separate field
+      business_type: "other",
+    };
+    const res = await createLeadApi(dataToSend);
+    if (res.data.auto_assign_info) {
+      setAutoAssignInfo(res.data.auto_assign_info);
     }
-  };
-
+    setShowCreateModal(false);
+    setFormData({
+      lead_name: "",
+      contact_number: "",
+      email: "",
+      service_required: "",
+      requirements: "",
+      lead_source: "other",
+      priority: "medium",
+      city: "",
+      state: "",
+    });
+    fetchLeads();
+  } catch (error) {
+    alert(error.response?.data?.message || "Error creating lead");
+  }
+};
   const handleEditLead = async (e) => {
     e.preventDefault();
     try {
@@ -327,30 +328,47 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
   };
 
   const handleCallLog = async (e) => {
-    e.preventDefault();
-    try {
-      await addCallLogApi(selectedLead._id, {
-        calling_status: callLogData.calling_status,
-        comment: callLogData.comment,
-      });
-      // Update lead with budget and requirements if provided
-      if (callLogData.budget || callLogData.requirements || callLogData.expected_closing_date) {
-        await updateLeadApi(selectedLead._id, {
-          budget: callLogData.budget,
-          requirements: callLogData.requirements,
-          next_follow_up_date: callLogData.expected_closing_date,
-        });
-      }
-      alert("Status updated successfully!");
-      setShowCallLogModal(false);
-      setCallLogData({
-        calling_status: "contacted",
-        comment: "",
-        requirements: "",
-        budget: "",
-        expected_closing_date: "",
-      });
-      fetchLeads();
+  e.preventDefault();
+  try {
+    await addCallLogApi(selectedLead._id, {
+      calling_status: callLogData.calling_status,
+      comment: callLogData.comment,
+    });
+
+    // Update lead with extra fields
+    const updateFields = {};
+    if (callLogData.budget) updateFields.budget = callLogData.budget;
+    if (callLogData.requirements) updateFields.requirements = callLogData.requirements;
+    if (callLogData.expected_closing_date) updateFields.next_follow_up_date = callLogData.expected_closing_date;
+    if (callLogData.priority) updateFields.priority = callLogData.priority;
+    if (callLogData.next_follow_up_date) updateFields.next_follow_up_date = callLogData.next_follow_up_date;
+
+    // Set stage based on priority
+    if (callLogData.priority === "low" && callLogData.calling_status === "not_interested") {
+      updateFields.current_stage = "follow_up";
+    }
+
+    if (Object.keys(updateFields).length > 0) {
+      await updateLeadApi(selectedLead._id, updateFields);
+    }
+
+    // ✅ Create follow up notification for qualifier
+    if (callLogData.next_follow_up_date) {
+      alert(`Follow up scheduled for ${callLogData.next_follow_up_date}`);
+    }
+
+    alert("Status updated successfully!");
+    setShowCallLogModal(false);
+    setCallLogData({
+      calling_status: "interested",
+      comment: "",
+      requirements: "",
+      budget: "",
+      expected_closing_date: "",
+      priority: "",
+      next_follow_up_date: "",
+    });
+    fetchLeads();
     } catch (error) {
       alert(error.response?.data?.message || "Error updating status");
     }
@@ -380,22 +398,23 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
     }
   };
 
-  const getStageBadge = (stage) => {
-    const map = {
-      new: "badge-info",
-      interested: "badge-primary",
-      contacted: "badge-info",
-      follow_up: "badge-warning",
-      proposal_sent: "badge-gold",
-      negotiation: "badge-warning",
-      hot_lead: "badge-danger",
-      meeting_scheduled: "badge-primary",
-      closed_won: "badge-success",
-      closed_lost: "badge-danger",
-      not_interested: "badge-danger",
-    };
-    return map[stage] || "badge-info";
+ const getStageBadge = (stage) => {
+  const map = {
+    new: "badge-info",
+    fresh: "badge-info",         // ✅ ADD
+    interested: "badge-primary",
+    contacted: "badge-warning",  // ✅ CHANGED color
+    follow_up: "badge-warning",
+    proposal_sent: "badge-gold",
+    negotiation: "badge-warning",
+    hot_lead: "badge-danger",
+    meeting_scheduled: "badge-primary",
+    closed_won: "badge-success",
+    closed_lost: "badge-danger",
+    not_interested: "badge-danger",
   };
+  return map[stage] || "badge-info";
+};
 
   const getServiceLabel = (val) => {
     const found = SERVICE_OPTIONS.find((s) => s.value === val);
@@ -478,6 +497,7 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
           >
             <option value="">All Stages</option>
             <option value="new">New</option>
+             <option value="fresh">Fresh</option>
             <option value="interested">Interested</option>
             <option value="contacted">Contacted</option>
             <option value="follow_up">Follow Up</option>
@@ -537,7 +557,7 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
               <th>Service</th>
               <th>Stage</th>
               <th>Priority</th>
-              <th>Assigned To</th>
+              {!hasRole(["lead_qualifier"]) && <th>Assigned To</th>}
               {hasRole(["lead_qualifier"]) && <th>Assigned By</th>}
               <th>Calls</th>
               <th>Actions</th>
@@ -616,7 +636,7 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
                   {/* ✅ Service column instead of Business */}
                   <td>
                     <span className="badge badge-gold">
-                      {getServiceLabel(lead.requirements)}
+                      {getServiceLabel(lead.service_required)}
                     </span>
                   </td>
                   <td>
@@ -637,10 +657,13 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
                       {lead.priority}
                     </span>
                   </td>
-                  <td>{lead.assigned_to_name || "Unassigned"}</td>
+                 {!hasRole(["lead_qualifier"]) && (
+                    <td>{lead.assigned_to_name || "Unassigned"}</td>
+                  )}
                   {hasRole(["lead_qualifier"]) && (
                     <td>{lead.assigned_by_name || "-"}</td>
                   )}
+
                   <td>{lead.total_calls}</td>
                   <td>
                     <div className="action-btns">
@@ -674,6 +697,20 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
                           title="Update Status"
                           onClick={() => {
                             setSelectedLead(lead);
+                            // ✅ Pre-fill with EXISTING data from lead
+                            setCallLogData({
+                              calling_status: lead.calling_status === "pending" ? "interested" : (lead.calling_status || "interested"),
+                              comment: lead.comment || "",
+                              requirements: lead.requirements || "",
+                              budget: lead.budget || "",
+                              expected_closing_date: lead.next_follow_up_date
+                                ? new Date(lead.next_follow_up_date).toISOString().split("T")[0]
+                                : "",
+                              priority: lead.priority === "medium" ? "" : (lead.priority || ""),
+                              next_follow_up_date: lead.next_follow_up_date
+                                ? new Date(lead.next_follow_up_date).toISOString().split("T")[0]
+                                : "",
+                            });
                             setShowCallLogModal(true);
                           }}
                         >
@@ -993,9 +1030,9 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
                 <div className="form-group">
                   <label className="form-label">Service Required *</label>
                   <select
-                    name="service_type"
+                    name="service_required"
                     className="form-select"
-                    value={formData.service_type}
+                    value={formData.service_required}
                     onChange={handleChange}
                     required
                   >
@@ -1028,20 +1065,7 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
                     <option value="other">Other</option>
                   </select>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Priority</label>
-                  <select
-                    name="priority"
-                    className="form-select"
-                    value={formData.priority}
-                    onChange={handleChange}
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
-                  </select>
-                </div>
+                
               </div>
 
               <div className="form-row">
@@ -1145,19 +1169,19 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Service Required</label>
-                  <select
-                    name="service_type"
-                    className="form-select"
-                    value={editFormData.service_type}
-                    onChange={handleEditChange}
-                  >
-                    <option value="">Select Service</option>
-                    {SERVICE_OPTIONS.map((s) => (
-                      <option key={s.value} value={s.value}>{s.label}</option>
-                    ))}
-                  </select>
-                </div>
+                <label className="form-label">Service Required</label>
+                <select
+                  name="service_required"
+                  className="form-select"
+                  value={editFormData.service_required}
+                  onChange={handleEditChange}
+                >
+                  <option value="">Select Service</option>
+                  {SERVICE_OPTIONS.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
               </div>
 
               <div className="form-row">
@@ -1356,8 +1380,21 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
               </div>
               <div className="detail-item">
                 <label>Service Required</label>
-                <span>{getServiceLabel(selectedLead.requirements)}</span>
+                <span>{getServiceLabel(selectedLead.service_required)}</span>
               </div>
+
+              {/* After detail-grid, BEFORE call history, ADD this section */}
+              {selectedLead.requirements && (
+                <div style={{ marginTop: "16px", padding: "12px", background: "#f0f7f6", borderRadius: "8px" }}>
+                  <label className="form-label" style={{ fontWeight: "600", color: "#10443e" }}>
+                    📋 Detailed Requirements (from client)
+                  </label>
+                  <p style={{ fontSize: "13px", marginTop: "6px" }}>
+                    {selectedLead.requirements}
+                  </p>
+                </div>
+              )}
+              
               <div className="detail-item">
                 <label>Stage</label>
                 <span className={`badge ${getStageBadge(selectedLead.current_stage)}`}>
@@ -1570,29 +1607,88 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
             </div>
 
             <form onSubmit={handleCallLog}>
-              <div className="form-group">
-                <label className="form-label">Call Status *</label>
-                <select
-                  className="form-select"
-                  value={callLogData.calling_status}
-                  onChange={(e) =>
-                    setCallLogData({
-                      ...callLogData,
-                      calling_status: e.target.value,
-                    })
-                  }
-                >
-                  <option value="contacted">Contacted</option>
-                  <option value="interested">Interested</option>
-                  <option value="not_interested">Not Interested</option>
-                  <option value="busy">Busy</option>
-                  <option value="switched_off">Switched Off</option>
-                  <option value="no_answer">No Answer</option>
-                  <option value="cut_call">Cut Call</option>
-                  <option value="wrong_number">Wrong Number</option>
-                  <option value="callback_requested">Callback Requested</option>
-                </select>
-              </div>
+             {/* In the Update Status modal (Call Log Modal), replace the status dropdown with: */}
+                   {selectedLead.service_required && (
+                    <div
+                      style={{
+                        background: "#f7e7ce",
+                        padding: "10px 14px",
+                        borderRadius: "8px",
+                        marginBottom: "16px",
+                        fontSize: "13px",
+                        color: "#856404",
+                      }}
+                    >
+                      💼 Service Required:{" "}
+                      <strong>
+                        {getServiceLabel(selectedLead.service_required)}
+                      </strong>
+                      <div style={{ fontSize: "11px", marginTop: "4px", color: "#797e88" }}>
+                        (Set by {selectedLead.created_by_name || "Admin"})
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="form-group">
+                    <label className="form-label">Call Status *</label>
+                    <select
+                      className="form-select"
+                      value={callLogData.calling_status}
+                      onChange={(e) =>
+                        setCallLogData({
+                          ...callLogData,
+                          calling_status: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="interested">Interested</option>
+                      <option value="not_interested">Not Interested</option>
+                      <option value="callback_requested">Callback Requested</option>
+                      <option value="no_answer">No Answer</option>
+                    </select>
+                  </div>
+
+                  {/* ✅ Add Priority dropdown AFTER calling status */}
+                  <div className="form-group">
+                    <label className="form-label">Lead Priority</label>
+                    <select
+                      className="form-select"
+                      value={callLogData.priority || ""}
+                      onChange={(e) => {
+                        setCallLogData({ ...callLogData, priority: e.target.value });
+                      }}
+                    >
+                      <option value="">-- Select Priority --</option>
+                      <option value="low">Low</option>
+                      <option value="high">High</option>
+                      <option value="urgent">Urgent</option>
+                      <option value="hot">Hot 🔥</option>
+                    </select>
+                  </div>
+
+                  {/* ✅ Show Follow Up Date when priority is "low" and status is "not_interested" */}
+                  {callLogData.priority === "low" && callLogData.calling_status === "not_interested" && (
+                    <div className="form-group">
+                      <label className="form-label">
+                        Next Follow Up Date *
+                        <span style={{ color: "#D4AF37", fontSize: "11px", marginLeft: "6px" }}>
+                          (Low priority - schedule follow up)
+                        </span>
+                      </label>
+                      <input
+                        type="date"
+                        className="form-input"
+                        value={callLogData.next_follow_up_date || ""}
+                        onChange={(e) =>
+                          setCallLogData({
+                            ...callLogData,
+                            next_follow_up_date: e.target.value,
+                          })
+                        }
+                        required
+                      />
+                    </div>
+                  )}
 
               {/* ✅ Requirements from client */}
               <div className="form-group">

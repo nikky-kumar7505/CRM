@@ -30,10 +30,20 @@ const userSchema = new mongoose.Schema(
     },
 
     role: {
-      type: String,
-      enum: ["admin", "sales_manager", "lead_qualifier", "sales_closer"],
-      default: "lead_qualifier",
-    },
+    type: String,
+    enum: [
+      "admin",
+      "sales_manager",
+      "lead_qualifier",
+      "sales_closer",
+      "video_editor",       // ✅ NEW
+      "web_developer",      // ✅ NEW
+      "video_shooter",      // ✅ NEW
+      "social_media_manager", // ✅ NEW
+      "designer",           // ✅ NEW
+    ],
+    default: "lead_qualifier",
+},
 
     crm_access: {
       type: [String],

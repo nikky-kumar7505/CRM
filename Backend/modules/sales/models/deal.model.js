@@ -142,10 +142,10 @@ const dealSchema = new mongoose.Schema(
 
     // ─── Payment ──────────────────────────────────────────────
     payment_status: {
-      type: String,
-      enum: ["not_paid", "partially_paid", "fully_paid", "refunded"],
-      default: "not_paid",
-    },
+    type: String,
+    enum: ["partially_paid", "fully_paid"],  // ✅ Removed not_paid and refunded
+    default: "partially_paid",
+  },
 
     payment_amount: {
       type: Number,

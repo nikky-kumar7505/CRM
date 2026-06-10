@@ -6,7 +6,7 @@ import morgan from "morgan";
 import path from "path";
 import { fileURLToPath } from "url";
 import notificationRoutes from "./shared/routes/notification.routes.js";
-
+import onboardingRoutes from "./modules/sales/routes/onboarding.routes.js";
 // ─── Config ───────────────────────────────────────────────────────────────────
 dotenv.config();
 
@@ -34,7 +34,7 @@ app.use(morgan("dev")); // Log requests in terminal
 app.use(express.json()); // Parse JSON body
 app.use(express.urlencoded({ extended: true })); // Parse form data
 app.use("/api/notifications", notificationRoutes);
-
+app.use("/api/sales/onboarding", onboardingRoutes);
 // ─── Static Files (for call recordings, uploads) ─────────────────────────────
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 

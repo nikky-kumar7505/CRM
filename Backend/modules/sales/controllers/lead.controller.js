@@ -1,10 +1,13 @@
+import Deal from "../models/deal.model.js";
 import Lead from "../models/lead.model.js";
 import User from "../../../shared/models/user.model.js";
 import Notification from "../../../shared/models/notification.model.js";
 
+
 // ─── Create Lead ──────────────────────────────────────────────────────────────
 // POST /api/sales/leads
 // Admin, Sales Manager can create lead
+// ─── Create Lead ──────────────────────────────────────────────────────────────
 export const createLead = async (req, res) => {
   try {
     const {
@@ -20,30 +23,31 @@ export const createLead = async (req, res) => {
       lead_source_detail,
       budget,
       requirements,
-      priority,
+      service_required,  // ✅ NEW field
       tags,
       city,
       state,
       country,
     } = req.body;
 
-    // ─── Generate Unique Lead ID ──────────────────────────────
-    // Find the last created lead and increment
+    // Generate Lead ID
     const lastLead = await Lead.findOne({}, { lead_id: 1 })
       .sort({ createdAt: -1 })
       .lean();
 
     let newLeadNumber = 1;
     if (lastLead && lastLead.lead_id) {
-      const lastNumber = parseInt(lastLead.lead_id.replace("LEAD-", ""));
+      const lastNumber = parseInt(
+        lastLead.lead_id.replace("LEAD-", "").replace("SWZ-", "")
+      );
       if (!isNaN(lastNumber)) {
         newLeadNumber = lastNumber + 1;
       }
     }
 
-    const lead_id = `LEAD-${String(newLeadNumber).padStart(4, "0")}`;
+    const lead_id = `SWZ-${String(newLeadNumber).padStart(4, "0")}`;
 
-    // ─── Auto Assign to Lead Qualifier with Least Leads ──────
+    // Auto Assign
     const qualifiers = await User.find({
       role: "lead_qualifier",
       is_active: true,
@@ -54,7 +58,6 @@ export const createLead = async (req, res) => {
     let autoAssignMessage = null;
 
     if (qualifiers.length > 0) {
-      // Count leads for each qualifier
       const qualifierLeadCounts = await Promise.all(
         qualifiers.map(async (q) => {
           const count = await Lead.countDocuments({ assigned_to: q._id });
@@ -62,7 +65,6 @@ export const createLead = async (req, res) => {
         })
       );
 
-      // Find qualifier with least leads
       const leastBusy = qualifierLeadCounts.reduce((prev, curr) =>
         prev.leadCount <= curr.leadCount ? prev : curr
       );
@@ -72,14 +74,13 @@ export const createLead = async (req, res) => {
       autoAssignMessage = `Lead automatically assigned to ${leastBusy.name} (${leastBusy.employee_id})`;
     }
 
-    // Create lead
     const lead = await Lead.create({
       lead_id,
       lead_name,
       contact_number,
       alternate_contact,
       email,
-      business_type,
+      business_type: business_type || "other",
       business_name,
       website,
       social_media_handle,
@@ -87,7 +88,8 @@ export const createLead = async (req, res) => {
       lead_source_detail,
       budget,
       requirements,
-      priority: priority || "medium",
+      service_required,  // ✅ Save service_required
+      priority: "medium",
       tags,
       city,
       state,
@@ -97,17 +99,35 @@ export const createLead = async (req, res) => {
       assignment_date: assigned_to ? new Date() : null,
       assigned_by: assigned_to ? req.user._id : null,
       assigned_by_name: assigned_to ? req.user.name : null,
-      current_stage: assigned_to ? "contacted" : "new",
+      current_stage: "fresh",  // ✅ ALWAYS fresh when created by admin/manager
       created_by: req.user._id,
       created_by_name: req.user.name,
     });
 
-    // ─── Create Notification for Lead Qualifier ───────────────
     if (assigned_to) {
       await Notification.create({
         user_id: assigned_to,
         title: "New Lead Assigned",
         message: `A new lead "${lead_name}" has been assigned to you by ${req.user.name}.`,
+        type: "lead_assigned",
+        ref_id: lead._id,
+        ref_model: "Lead",
+      });
+    }
+
+    const adminsAndManagers = await User.find({
+      role: { $in: ["admin", "sales_manager"] },
+      is_active: true,
+      _id: { $ne: req.user._id },
+    });
+
+    for (const person of adminsAndManagers) {
+      await Notification.create({
+        user_id: person._id,
+        title: "New Lead Created",
+        message: `New lead "${lead_name}" created${
+          assigned_to_name ? ` and assigned to ${assigned_to_name}` : ""
+        }.`,
         type: "lead_assigned",
         ref_id: lead._id,
         ref_model: "Lead",
@@ -128,6 +148,132 @@ export const createLead = async (req, res) => {
     });
   }
 };
+
+
+
+
+// ─── Close Lead by Lead Qualifier (Follow Up Section) ─────────────────────────
+export const closeLeadByQualifier = async (req, res) => {
+  try {
+    const { closure_reason } = req.body;
+
+    const lead = await Lead.findById(req.params.id);
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: "Lead not found.",
+      });
+    }
+
+    if (
+      req.user.role === "lead_qualifier" &&
+      lead.assigned_to?.toString() !== req.user._id.toString()
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only close leads assigned to you.",
+      });
+    }
+
+    await Lead.findByIdAndUpdate(lead._id, {
+      current_stage: "closed_lost",
+      comment: closure_reason || "Client not interested after follow up.",
+    });
+
+    // Notify admin and manager
+    const adminsAndManagers = await User.find({
+      role: { $in: ["admin", "sales_manager"] },
+      is_active: true,
+    });
+
+    for (const person of adminsAndManagers) {
+      await Notification.create({
+        user_id: person._id,
+        title: "Lead Closed by Qualifier",
+        message: `Lead "${lead.lead_name}" closed by ${req.user.name}. Reason: ${closure_reason || "Not interested"}`,
+        type: "general",
+        ref_id: lead._id,
+        ref_model: "Lead",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Lead closed successfully.",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Server error.",
+      error: error.message,
+    });
+  }
+};
+
+
+
+
+
+// ─── Get Follow Up Leads ──────────────────────────────────────────────────────
+export const getFollowUpLeads = async (req, res) => {
+  try {
+    let filter = {
+      next_follow_up_date: { $ne: null },
+      current_stage: { $nin: ["closed_won", "closed_lost"] },
+    };
+
+    if (req.user.role === "lead_qualifier") {
+      filter.assigned_to = req.user._id;
+    }
+
+    const leads = await Lead.find(filter)
+      .sort({ next_follow_up_date: 1 }) // closest date first
+      .populate("assigned_to", "name email employee_id");
+
+    res.status(200).json({
+      success: true,
+      count: leads.length,
+      data: leads,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Server error.",
+      error: error.message,
+    });
+  }
+};
+
+// ─── Get Hot Leads ────────────────────────────────────────────────────────────
+export const getHotLeads = async (req, res) => {
+  try {
+    let filter = {
+      priority: "hot",
+      current_stage: { $nin: ["closed_won", "closed_lost"] },
+    };
+
+    if (req.user.role === "lead_qualifier") {
+      filter.assigned_to = req.user._id;
+    }
+
+    const leads = await Lead.find(filter)
+      .sort({ createdAt: -1 })
+      .populate("assigned_to", "name email employee_id");
+
+    res.status(200).json({
+      success: true,
+      count: leads.length,
+      data: leads,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Server error.",
+      error: error.message,
+    });
+  }
+};
+
 
 // ─── Get All Leads ────────────────────────────────────────────────────────────
 // GET /api/sales/leads
@@ -273,7 +419,6 @@ export const updateLead = async (req, res) => {
       });
     }
 
-    // Lead qualifier can only update their assigned leads
     if (
       req.user.role === "lead_qualifier" &&
       lead.assigned_to?.toString() !== req.user._id.toString()
@@ -284,7 +429,6 @@ export const updateLead = async (req, res) => {
       });
     }
 
-    // Update allowed fields
     const allowedFields = [
       "lead_name",
       "contact_number",
@@ -301,6 +445,7 @@ export const updateLead = async (req, res) => {
       "comment",
       "budget",
       "requirements",
+      "service_required",  // ✅ NEW
       "priority",
       "tags",
       "city",
@@ -313,6 +458,16 @@ export const updateLead = async (req, res) => {
         lead[field] = req.body[field];
       }
     });
+
+    // ✅ Auto change stage if was fresh and any update happens
+    if (lead.current_stage === "fresh") {
+      lead.current_stage = "contacted";
+    }
+
+    // ✅ Auto change stage to hot_lead if priority set to hot
+    if (req.body.priority === "hot") {
+      lead.current_stage = "hot_lead";
+    }
 
     await lead.save();
 
@@ -361,6 +516,7 @@ export const deleteLead = async (req, res) => {
 // ─── Assign Lead to Lead Qualifier ───────────────────────────────────────────
 // PUT /api/sales/leads/:id/assign
 // Sales Manager or Admin can assign leads
+// ─── Assign Lead to Lead Qualifier ───────────────────────────────────────────
 export const assignLead = async (req, res) => {
   try {
     const { qualifier_id } = req.body;
@@ -400,11 +556,11 @@ export const assignLead = async (req, res) => {
     lead.assigned_by = req.user._id;
     lead.assigned_by_name = req.user.name;
     lead.assignment_date = new Date();
-    lead.current_stage = "contacted";
+    lead.current_stage = "fresh";  // ✅ Changed from "contacted" to "fresh"
 
     await lead.save();
 
-    // ─── Send Notification to Lead Qualifier ──────────────────
+    // Send notification
     await Notification.create({
       user_id: qualifier._id,
       title: "Lead Assigned to You",
@@ -430,11 +586,10 @@ export const assignLead = async (req, res) => {
 
 // ─── Add Call Log ─────────────────────────────────────────────────────────────
 // POST /api/sales/leads/:id/call-log
-// Lead Qualifier logs each call
+// ─── Add Call Log ─────────────────────────────────────────────────────────────
 export const addCallLog = async (req, res) => {
   try {
-    const { calling_status, comment, call_duration, call_recording } =
-      req.body;
+    const { calling_status, comment, call_recording } = req.body;
 
     const lead = await Lead.findById(req.params.id);
     if (!lead) {
@@ -444,7 +599,6 @@ export const addCallLog = async (req, res) => {
       });
     }
 
-    // Lead qualifier can only add logs to their assigned leads
     if (
       req.user.role === "lead_qualifier" &&
       lead.assigned_to?.toString() !== req.user._id.toString()
@@ -455,37 +609,62 @@ export const addCallLog = async (req, res) => {
       });
     }
 
-    // Create call history entry
     const callEntry = {
       called_by: req.user._id,
       called_by_name: req.user.name,
       call_date: new Date(),
       calling_status,
       comment,
-      call_duration,
       call_recording,
     };
 
-    // Push to call history array
     lead.call_history.push(callEntry);
-
-    // Update lead calling info
     lead.calling_status = calling_status;
     lead.last_calling_date = new Date();
     lead.total_calls = lead.total_calls + 1;
     lead.comment = comment || lead.comment;
 
-    // Set first calling date if not set
     if (!lead.first_calling_date) {
       lead.first_calling_date = new Date();
     }
 
-    // Update latest call recording if provided
     if (call_recording) {
       lead.call_recording = call_recording;
     }
 
+    // ✅ AUTO change stage based on calling_status
+    if (lead.current_stage === "fresh" || lead.current_stage === "new") {
+      // First contact - move from fresh to contacted
+      lead.current_stage = "contacted";
+    }
+
+    // ✅ Map calling status to lead stage
+    if (calling_status === "interested") {
+      lead.current_stage = "interested";
+    } else if (calling_status === "not_interested") {
+      lead.current_stage = "not_interested";
+    } else if (calling_status === "callback_requested") {
+      lead.current_stage = "follow_up";
+    }
+
     await lead.save();
+
+    // Notify admin and manager
+    const adminsAndManagers = await User.find({
+      role: { $in: ["admin", "sales_manager"] },
+      is_active: true,
+    });
+
+    for (const person of adminsAndManagers) {
+      await Notification.create({
+        user_id: person._id,
+        title: "Lead Status Updated",
+        message: `${req.user.name} updated "${lead.lead_name}" to "${calling_status}".`,
+        type: "general",
+        ref_id: lead._id,
+        ref_model: "Lead",
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -501,9 +680,11 @@ export const addCallLog = async (req, res) => {
   }
 };
 
+
 // ─── Pass Lead to Sales Closer ────────────────────────────────────────────────
 // PUT /api/sales/leads/:id/pass-to-closer
 // Lead Qualifier passes lead to Sales Closer when meeting is arranged
+// ─── Pass Lead to Sales Closer (Auto Assign) ─────────────────────────────────
 export const passLeadToCloser = async (req, res) => {
   try {
     const lead = await Lead.findById(req.params.id);
@@ -678,7 +859,10 @@ export const uploadCSVLeads = async (req, res) => {
 
     let leadNumber = 1;
     if (lastLead && lastLead.lead_id) {
-      const lastNum = parseInt(lastLead.lead_id.replace("LEAD-", ""));
+      // ✅ NEW
+        const lastNum = parseInt(
+          lastLead.lead_id.replace("LEAD-", "").replace("SWZ-", "")
+        )
       if (!isNaN(lastNum)) {
         leadNumber = lastNum + 1;
       }
@@ -699,7 +883,8 @@ export const uploadCSVLeads = async (req, res) => {
         }
 
         // ─── Generate UNIQUE lead ID for each iteration ─────
-        const lead_id = `LEAD-${String(leadNumber).padStart(4, "0")}`;
+        // ✅ NEW
+        const lead_id = `SWZ-${String(leadNumber).padStart(4, "0")}`;
         leadNumber++; // increment for next lead
 
         // ─── Convert contact number (handles scientific notation) ──
@@ -751,17 +936,16 @@ export const uploadCSVLeads = async (req, res) => {
           city: rowData.city || "",
           state: rowData.state || "",
           requirements:
-            rowData.service_type ||
-            rowData.requirements ||
-            rowData.service ||
-            "",
+            rowData.requirements || rowData.service || "",  // ✅ Detailed requirements
+          service_required:
+            rowData.service_type || rowData.service_required || null,  // ✅ NEW
           priority: rowData.priority || "medium",
           assigned_to,
           assigned_to_name,
           assignment_date: assigned_to ? new Date() : null,
           assigned_by: assigned_to ? req.user._id : null,
           assigned_by_name: assigned_to ? req.user.name : null,
-          current_stage: assigned_to ? "contacted" : "new",
+          current_stage: "fresh",  // ✅ Always fresh
           created_by: req.user._id,
           created_by_name: req.user.name,
         });

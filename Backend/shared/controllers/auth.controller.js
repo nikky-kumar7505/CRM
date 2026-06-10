@@ -23,7 +23,7 @@ const registerUser = async (req, res) => {
     }
 
     const count = await User.countDocuments();
-    const employee_id = `EMP-${String(count + 1).padStart(4, "0")}`;
+    const employee_id = `SW-SAL${String(count + 1).padStart(4, "0")}`;
 
     let crm_access = ["sales"];
     if (role === "admin") {

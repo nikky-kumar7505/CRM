@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { createOnboardingApi } from "../../api/onboardingApi.js";
 import {
   getAllDealsApi,
   createDealApi,
@@ -30,6 +31,37 @@ const Deals = () => {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showMeetingModal, setShowMeetingModal] = useState(false);
   const [selectedDeal, setSelectedDeal] = useState(null);
+
+  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
+  const [closedDeal, setClosedDeal] = useState(null);
+  const [onboardingData, setOnboardingData] = useState({
+    client_name: "",
+    contact_number: "",
+    alternate_contact: "",
+    email: "",
+    business_name: "",
+    business_type: "",
+    website: "",
+    service_type: "video_editing",
+    service_details: "",
+    project_scope: "",
+    deliverables: "",
+    timeline: "",
+    total_amount: 0,
+    amount_paid: 0,
+    payment_status: "partially_paid",
+    payment_method: "upi",
+    invoice_number: "",
+    address: "",
+    city: "",
+    state: "",
+    pincode: "",
+    project_start_date: "",
+    project_deadline: "",
+    client_requirements: "",
+    special_instructions: "",
+    preferred_communication: "whatsapp",
+  });
 
   const [createData, setCreateData] = useState({
     lead_id: "",
@@ -114,23 +146,61 @@ const Deals = () => {
     }
   };
 
-  const handleUpdateDeal = async (e) => {
-    e.preventDefault();
-    try {
-      const dataToSend = {};
-      Object.keys(updateData).forEach((key) => {
-        if (updateData[key] !== "" && updateData[key] !== undefined) {
-          dataToSend[key] = updateData[key];
-        }
+ const handleUpdateDeal = async (e) => {
+  e.preventDefault();
+  try {
+    const dataToSend = {};
+    Object.keys(updateData).forEach((key) => {
+      if (updateData[key] !== "" && updateData[key] !== undefined) {
+        dataToSend[key] = updateData[key];
+      }
+    });
+    await updateDealApi(selectedDeal._id, dataToSend);
+    alert("Deal updated!");
+    setShowUpdateModal(false);
+
+    // ✅ If closed as WON - open onboarding form for closer
+    if (
+      updateData.deal_stage === "closed_won" &&
+      hasRole(["sales_closer", "admin", "sales_manager"])
+    ) {
+      setClosedDeal(selectedDeal);
+      setOnboardingData({
+        ...onboardingData,
+        client_name: selectedDeal.client_name,
+        contact_number: selectedDeal.contact_number,
+        email: selectedDeal.email || "",
+        business_name: selectedDeal.business_name || "",
+        business_type: selectedDeal.business_type || "",
+        total_amount: updateData.deal_value || selectedDeal.deal_value || 0,
+        amount_paid: updateData.payment_amount || 0,
+        payment_status: updateData.payment_status || "partially_paid",
+        service_details: selectedDeal.notes || "",
       });
-      await updateDealApi(selectedDeal._id, dataToSend);
-      alert("Deal updated!");
-      setShowUpdateModal(false);
-      fetchDeals();
-    } catch (error) {
-      alert(error.response?.data?.message || "Error updating deal");
+      setShowOnboardingModal(true);
     }
-  };
+
+    fetchDeals();
+  } catch (error) {
+    alert(error.response?.data?.message || "Error updating deal");
+  }
+};
+
+// ✅ Submit onboarding form
+const handleOnboardingSubmit = async (e) => {
+  e.preventDefault();
+  try {
+    await createOnboardingApi({
+      ...onboardingData,
+      deal_id: closedDeal._id,
+    });
+    alert("Onboarding completed successfully! Client added to onboarding.");
+    setShowOnboardingModal(false);
+    fetchDeals();
+  } catch (error) {
+    alert(error.response?.data?.message || "Error creating onboarding");
+  }
+};
 
   const handleAddMeeting = async (e) => {
     e.preventDefault();
@@ -632,10 +702,8 @@ const Deals = () => {
                       })
                     }
                   >
-                    <option value="not_paid">Not Paid</option>
-                    <option value="partially_paid">Partially Paid</option>
-                    <option value="fully_paid">Fully Paid</option>
-                    <option value="refunded">Refunded</option>
+                   <option value="partially_paid">Partially Paid</option>
+                  <option value="fully_paid">Fully Paid</option>
                   </select>
                 </div>
                 <div className="form-group">
@@ -831,6 +899,412 @@ const Deals = () => {
                 <button type="submit" className="btn btn-primary">
                   Add Meeting
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── ONBOARDING FORM MODAL (after deal close) ──────── */}
+{showOnboardingModal && closedDeal && (
+  <div className="modal-overlay">
+    <div className="modal-content" style={{ maxWidth: "780px" }}>
+      <div className="modal-header">
+        <h3 className="modal-title">
+          🎉 Client Onboarding — {closedDeal.client_name}
+        </h3>
+        <button
+          className="modal-close"
+          onClick={() => setShowOnboardingModal(false)}
+        >
+          ✕
+        </button>
+      </div>
+
+      <div
+        style={{
+          background: "#d4edda",
+          padding: "10px 14px",
+          borderRadius: "8px",
+          marginBottom: "16px",
+          fontSize: "13px",
+          color: "#155724",
+        }}
+      >
+        ✅ Deal closed! Please fill onboarding details to handover to team.
+      </div>
+
+      <form onSubmit={handleOnboardingSubmit}>
+        {/* Client Info */}
+        <h4 style={{ fontSize: "14px", color: "#10443e", marginBottom: "10px" }}>
+          Client Information
+        </h4>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Client Name *</label>
+            <input
+              type="text"
+              className="form-input"
+              value={onboardingData.client_name}
+              onChange={(e) =>
+                setOnboardingData({ ...onboardingData, client_name: e.target.value })
+              }
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Contact Number *</label>
+            <input
+              type="text"
+              className="form-input"
+              value={onboardingData.contact_number}
+              onChange={(e) =>
+                setOnboardingData({ ...onboardingData, contact_number: e.target.value })
+              }
+              required
+              maxLength={10}
+            />
+          </div>
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Alternate Contact</label>
+            <input
+              type="text"
+              className="form-input"
+              value={onboardingData.alternate_contact}
+              onChange={(e) =>
+                setOnboardingData({ ...onboardingData, alternate_contact: e.target.value })
+              }
+              maxLength={10}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Email</label>
+            <input
+              type="email"
+              className="form-input"
+              value={onboardingData.email}
+              onChange={(e) =>
+                setOnboardingData({ ...onboardingData, email: e.target.value })
+              }
+            />
+          </div>
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Business Name</label>
+            <input
+              type="text"
+              className="form-input"
+              value={onboardingData.business_name}
+              onChange={(e) =>
+                setOnboardingData({ ...onboardingData, business_name: e.target.value })
+              }
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Website</label>
+            <input
+              type="text"
+              className="form-input"
+              value={onboardingData.website}
+              onChange={(e) =>
+                setOnboardingData({ ...onboardingData, website: e.target.value })
+              }
+            />
+          </div>
+        </div>
+
+        {/* Service Info */}
+        <h4 style={{ fontSize: "14px", color: "#10443e", marginBottom: "10px", marginTop: "16px" }}>
+          Service Details
+        </h4>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Service Type *</label>
+            <select
+              className="form-select"
+              value={onboardingData.service_type}
+              onChange={(e) =>
+                setOnboardingData({ ...onboardingData, service_type: e.target.value })
+              }
+              required
+            >
+              <option value="video_shoot">Video Shoot</option>
+              <option value="video_editing">Video Editing</option>
+              <option value="web_development">Web Development</option>
+              <option value="social_media_management">Social Media Management</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Timeline</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="e.g. 2 weeks, 1 month"
+              value={onboardingData.timeline}
+              onChange={(e) =>
+                setOnboardingData({ ...onboardingData, timeline: e.target.value })
+              }
+            />
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Service Details *</label>
+          <textarea
+            className="form-input"
+            rows="2"
+            placeholder="Detailed description of services agreed..."
+            value={onboardingData.service_details}
+            onChange={(e) =>
+              setOnboardingData({ ...onboardingData, service_details: e.target.value })
+            }
+            required
+          ></textarea>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Deliverables</label>
+          <textarea
+            className="form-input"
+            rows="2"
+            placeholder="What will be delivered to client..."
+            value={onboardingData.deliverables}
+            onChange={(e) =>
+              setOnboardingData({ ...onboardingData, deliverables: e.target.value })
+            }
+          ></textarea>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Client Requirements</label>
+          <textarea
+            className="form-input"
+            rows="2"
+            placeholder="Specific requirements from client..."
+            value={onboardingData.client_requirements}
+            onChange={(e) =>
+              setOnboardingData({ ...onboardingData, client_requirements: e.target.value })
+            }
+          ></textarea>
+        </div>
+
+        {/* Payment Info */}
+        <h4 style={{ fontSize: "14px", color: "#10443e", marginBottom: "10px", marginTop: "16px" }}>
+          Payment Information
+        </h4>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Total Amount (₹) *</label>
+            <input
+              type="number"
+              className="form-input"
+              value={onboardingData.total_amount}
+              onChange={(e) =>
+                setOnboardingData({
+                  ...onboardingData,
+                  total_amount: parseFloat(e.target.value) || 0,
+                })
+              }
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Amount Paid (₹)</label>
+            <input
+              type="number"
+              className="form-input"
+              value={onboardingData.amount_paid}
+              onChange={(e) =>
+                setOnboardingData({
+                  ...onboardingData,
+                  amount_paid: parseFloat(e.target.value) || 0,
+                })
+              }
+            />
+          </div>
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Payment Status *</label>
+            <select
+              className="form-select"
+              value={onboardingData.payment_status}
+              onChange={(e) =>
+                setOnboardingData({ ...onboardingData, payment_status: e.target.value })
+              }
+              required
+            >
+              <option value="partially_paid">Partially Paid</option>
+              <option value="fully_paid">Fully Paid</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Payment Method</label>
+            <select
+              className="form-select"
+              value={onboardingData.payment_method}
+              onChange={(e) =>
+                setOnboardingData({ ...onboardingData, payment_method: e.target.value })
+              }
+            >
+              <option value="upi">UPI</option>
+              <option value="bank_transfer">Bank Transfer</option>
+              <option value="cash">Cash</option>
+              <option value="cheque">Cheque</option>
+              <option value="card">Card</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Invoice Number</label>
+          <input
+            type="text"
+            className="form-input"
+            value={onboardingData.invoice_number}
+            onChange={(e) =>
+              setOnboardingData({ ...onboardingData, invoice_number: e.target.value })
+            }
+          />
+        </div>
+
+        {/* Project Info */}
+        <h4 style={{ fontSize: "14px", color: "#10443e", marginBottom: "10px", marginTop: "16px" }}>
+          Project Schedule
+        </h4>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Project Start Date</label>
+            <input
+              type="date"
+              className="form-input"
+              value={onboardingData.project_start_date}
+              onChange={(e) =>
+                setOnboardingData({ ...onboardingData, project_start_date: e.target.value })
+              }
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Project Deadline</label>
+            <input
+              type="date"
+              className="form-input"
+              value={onboardingData.project_deadline}
+              onChange={(e) =>
+                setOnboardingData({ ...onboardingData, project_deadline: e.target.value })
+              }
+            />
+          </div>
+        </div>
+
+        {/* Address */}
+        <h4 style={{ fontSize: "14px", color: "#10443e", marginBottom: "10px", marginTop: "16px" }}>
+          Address
+        </h4>
+        <div className="form-group">
+          <label className="form-label">Address</label>
+          <textarea
+            className="form-input"
+            rows="2"
+            value={onboardingData.address}
+            onChange={(e) =>
+              setOnboardingData({ ...onboardingData, address: e.target.value })
+            }
+          ></textarea>
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">City</label>
+            <input
+              type="text"
+              className="form-input"
+              value={onboardingData.city}
+              onChange={(e) =>
+                setOnboardingData({ ...onboardingData, city: e.target.value })
+              }
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">State</label>
+            <input
+              type="text"
+              className="form-input"
+              value={onboardingData.state}
+              onChange={(e) =>
+                setOnboardingData({ ...onboardingData, state: e.target.value })
+              }
+            />
+          </div>
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Pincode</label>
+            <input
+              type="text"
+              className="form-input"
+              value={onboardingData.pincode}
+              onChange={(e) =>
+                setOnboardingData({ ...onboardingData, pincode: e.target.value })
+              }
+              maxLength={6}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Preferred Communication</label>
+            <select
+              className="form-select"
+              value={onboardingData.preferred_communication}
+              onChange={(e) =>
+                setOnboardingData({
+                  ...onboardingData,
+                  preferred_communication: e.target.value,
+                })
+              }
+            >
+              <option value="whatsapp">WhatsApp</option>
+              <option value="email">Email</option>
+              <option value="phone">Phone</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Special Instructions</label>
+          <textarea
+            className="form-input"
+            rows="2"
+            value={onboardingData.special_instructions}
+            onChange={(e) =>
+              setOnboardingData({
+                ...onboardingData,
+                special_instructions: e.target.value,
+              })
+            }
+          ></textarea>
+        </div>
+
+        <div className="modal-footer">
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={() => setShowOnboardingModal(false)}
+          >
+            Skip for Now
+          </button>
+          <button type="submit" className="btn btn-primary">
+            Complete Onboarding
+          </button>
               </div>
             </form>
           </div>

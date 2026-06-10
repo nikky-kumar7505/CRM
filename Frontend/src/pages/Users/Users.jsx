@@ -328,11 +328,19 @@ const Users = () => {
                     value={formData.role}
                     onChange={handleChange}
                   >
-                    {/* ✅ Admin can also create another admin */}
-                    <option value="admin">Admin</option>
-                    <option value="sales_manager">Sales Manager</option>
-                    <option value="lead_qualifier">Lead Qualifier</option>
-                    <option value="sales_closer">Sales Closer</option>
+                    <optgroup label="Sales Team">
+                      <option value="admin">Admin</option>
+                      <option value="sales_manager">Sales Manager</option>
+                      <option value="lead_qualifier">Lead Qualifier</option>
+                      <option value="sales_closer">Sales Closer</option>
+                    </optgroup>
+                    <optgroup label="Production Team">
+                      <option value="video_editor">Video Editor</option>
+                      <option value="web_developer">Web Developer</option>
+                      <option value="video_shooter">Video Shooter</option>
+                      <option value="social_media_manager">Social Media Manager</option>
+                      <option value="designer">Designer</option>
+                    </optgroup>
                   </select>
                 </div>
 

@@ -144,22 +144,23 @@ const leadSchema = new mongoose.Schema(
 
     // ─── Current Stage ────────────────────────────────────────
     current_stage: {
-      type: String,
-      enum: [
-        "new",
-        "not_interested",
-        "interested",
-        "contacted",
-        "follow_up",
-        "proposal_sent",
-        "negotiation",
-        "hot_lead",
-        "meeting_scheduled", // when passed to sales closer
-        "closed_won",
-        "closed_lost",
-      ],
-      default: "new",
-    },
+  type: String,
+  enum: [
+    "new",
+    "fresh",           // ✅ NEW - just assigned, not contacted yet
+    "not_interested",
+    "interested",
+    "contacted",
+    "follow_up",
+    "proposal_sent",
+    "negotiation",
+    "hot_lead",
+    "meeting_scheduled",
+    "closed_won",
+    "closed_lost",
+  ],
+  default: "new",
+},
 
     // ─── Calling Info ─────────────────────────────────────────
     first_calling_date: {
@@ -246,7 +247,7 @@ const leadSchema = new mongoose.Schema(
     // ─── Priority ─────────────────────────────────────────────
     priority: {
       type: String,
-      enum: ["low", "medium", "high", "urgent"],
+      enum: ["low", "medium", "high", "urgent", "hot"],  // ✅ added "hot"
       default: "medium",
     },
 
@@ -262,6 +263,30 @@ const leadSchema = new mongoose.Schema(
     country: {
       type: String,
       default: "India",
+    },
+
+    // ─── Service & Requirements ──────────────────────────────
+    service_required: {
+    type: String,
+    enum: [
+      "video_shoot",
+      "video_editing",
+      "web_development",
+      "social_media_management",
+      "other",
+    ],
+    default: null,
+    },
+
+    // requirements field already exists, keep it - this stores DETAILED requirements
+    requirements: {
+      type: String,
+      default: null,
+    },
+
+    budget: {
+      type: String,
+      default: null,
     },
 
     // ─── Created By ───────────────────────────────────────────
