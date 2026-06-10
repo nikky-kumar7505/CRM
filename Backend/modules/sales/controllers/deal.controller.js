@@ -52,6 +52,9 @@ export const createDeal = async (req, res) => {
       assigned_to_name: closer.name,
       assigned_by: req.user._id,
       assigned_by_name: req.user.name,
+      qualifier_id: lead.assigned_to,            // ✅ ADDED
+      qualifier_name: lead.assigned_to_name,     // ✅ ADDED
+      payment_status: "not_received",            // ✅ ADDED (default)
       deal_value,
       expected_closure_date,
       notes,
@@ -232,10 +235,104 @@ export const updateDeal = async (req, res) => {
     await deal.save();
 
     // If deal is closed, update the lead stage too
-    if (req.body.deal_stage === "closed_won") {
-      await Lead.findByIdAndUpdate(deal.lead_ref, {
-        current_stage: "closed_won",
-      });
+   if (req.body.deal_stage === "closed_won") {
+  // ✅ AUTO CREATE ONBOARDING ENTRY
+      const Onboarding = (await import("../models/onboarding.model.js")).default;
+      const NotificationModel = (await import("../../../shared/models/notification.model.js")).default;
+      const UserModel = (await import("../../../shared/models/user.model.js")).default;
+
+      // Check if onboarding already exists for this deal
+      const existingOnboarding = await Onboarding.findOne({ deal_ref: deal._id });
+
+      if (!existingOnboarding) {
+        // Get full lead data
+        const fullLead = await Lead.findById(deal.lead_ref).lean();
+
+        // Generate onboarding ID
+        const lastOnboarding = await Onboarding.findOne({}, { onboarding_id: 1 })
+          .sort({ createdAt: -1 })
+          .lean();
+
+        let newNumber = 1;
+        if (lastOnboarding && lastOnboarding.onboarding_id) {
+          const lastNum = parseInt(
+            lastOnboarding.onboarding_id.replace("ONB-", "")
+          );
+          if (!isNaN(lastNum)) newNumber = lastNum + 1;
+        }
+        const onboarding_id = `ONB-${String(newNumber).padStart(4, "0")}`;
+
+        // Map service from lead's service_required
+        const serviceMap = {
+          video_shoot: "video_shoot",
+          video_editing: "video_editing",
+          web_development: "web_development",
+        };
+        const service_type =
+          serviceMap[fullLead?.service_required] || "video_editing";
+
+        // Auto create onboarding with available data
+        const newOnboarding = await Onboarding.create({
+          onboarding_id,
+          deal_ref: deal._id,
+          lead_ref: deal.lead_ref,
+          deal_id: deal.deal_id,
+          lead_id: deal.lead_id,
+          client_name: deal.client_name,
+          contact_number: deal.contact_number,
+          alternate_contact: fullLead?.alternate_contact || "",
+          email: deal.email || "",
+          business_name: deal.business_name || "",
+          business_type: deal.business_type || "",
+          website: fullLead?.website || "",
+          service_type,
+          service_details:
+            deal.notes || fullLead?.requirements || "Pending - to be filled",
+          client_requirements: fullLead?.requirements || "",
+          total_amount: req.body.deal_value || deal.deal_value || 0,
+          amount_paid: req.body.payment_amount || deal.payment_amount || 0,
+          amount_pending:
+            (req.body.deal_value || deal.deal_value || 0) -
+            (req.body.payment_amount || deal.payment_amount || 0),
+          payment_status: req.body.payment_status || "not_received",
+          payment_method: "upi",
+          city: fullLead?.city || "",
+          state: fullLead?.state || "",
+          country: fullLead?.country || "India",
+          closed_by: req.user._id,
+          closed_by_name: req.user.name,
+          closed_date: new Date(),
+          preferred_communication: "whatsapp",
+          onboarding_status: "pending_assignment",
+        });
+
+        // ✅ Update lead stage to "onboard"
+        await Lead.findByIdAndUpdate(deal.lead_ref, {
+          current_stage: "onboard",
+        });
+
+        // ✅ Notify admins and managers
+        const admins = await UserModel.find({
+          role: { $in: ["admin", "sales_manager"] },
+          is_active: true,
+        });
+
+        for (const a of admins) {
+          await NotificationModel.create({
+            user_id: a._id,
+            title: "🎉 New Client Onboarded",
+            message: `${req.user.name} closed deal for "${deal.client_name}". Onboarding entry created. Please assign team member.`,
+            type: "deal_updated",
+            ref_id: newOnboarding._id,
+            ref_model: "Deal",
+          });
+        }
+      } else {
+        // If onboarding already exists, just update lead stage
+        await Lead.findByIdAndUpdate(deal.lead_ref, {
+          current_stage: "onboard",
+        });
+      }
     } else if (req.body.deal_stage === "closed_lost") {
       await Lead.findByIdAndUpdate(deal.lead_ref, {
         current_stage: "closed_lost",

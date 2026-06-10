@@ -82,6 +82,16 @@ const dealSchema = new mongoose.Schema(
 
     assigned_to_name: String,
 
+    qualifier_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    qualifier_name: {
+      type: String,
+      default: null,
+    },
+
     assigned_by: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -142,10 +152,10 @@ const dealSchema = new mongoose.Schema(
 
     // ─── Payment ──────────────────────────────────────────────
     payment_status: {
-    type: String,
-    enum: ["partially_paid", "fully_paid"],  // ✅ Removed not_paid and refunded
-    default: "partially_paid",
-  },
+      type: String,
+      enum: ["not_received", "partially_paid", "fully_paid"],
+      default: "not_received",
+    },
 
     payment_amount: {
       type: Number,

@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext.jsx";
+import CredentialForm from "./pages/Credentials/CredentialForm.jsx";
 
 import MainLayout from "./components/Layout/MainLayout.jsx";
 import ProtectedRoute from "./components/Auth/ProtectedRoute.jsx";
@@ -146,6 +147,8 @@ const AppRoutes = () => (
     <Route path="/login" element={<Login />} />
     <Route path="/unauthorized" element={<Unauthorized />} />
     <Route path="/" element={<RootRedirect />} />
+    <Route path="/credentials/:token" element={<CredentialForm />} />
+
 
     <Route element={<ProtectedRoute />}>
       <Route

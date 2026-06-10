@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext.jsx";
-import { createOnboardingApi } from "../../api/onboardingApi.js";
 import {
   getAllDealsApi,
   createDealApi,
@@ -8,6 +7,12 @@ import {
   deleteDealApi,
   addMeetingApi,
 } from "../../api/dealApi.js";
+
+import {
+  createOnboardingApi,
+  getAllOnboardingsApi,
+  updateOnboardingApi,
+} from "../../api/onboardingApi.js";
 import { getAllLeadsApi } from "../../api/leadApi.js";
 import { getAllUsersApi } from "../../api/authApi.js";
 import {
@@ -156,26 +161,52 @@ const Deals = () => {
       }
     });
     await updateDealApi(selectedDeal._id, dataToSend);
-    alert("Deal updated!");
+    // ✅ Show specific alert based on stage
+    if (updateData.deal_stage === "closed_won") {
+      alert("🎉 Deal closed as WON! Client moved to Onboarding section. You can fill onboarding details now or skip and fill later from Onboarding section.");
+    } else if (updateData.deal_stage === "closed_lost") {
+      alert("Deal marked as LOST.");
+    } else {
+      alert("Deal updated!");
+    }
     setShowUpdateModal(false);
 
     // ✅ If closed as WON - open onboarding form for closer
     if (
-      updateData.deal_stage === "closed_won" &&
+    updateData.deal_stage === "closed_won" &&
       hasRole(["sales_closer", "admin", "sales_manager"])
     ) {
+      // ✅ Fetch full lead data to pre-fill onboarding form
+      const leadData = selectedDeal.lead_ref || {};
       setClosedDeal(selectedDeal);
       setOnboardingData({
-        ...onboardingData,
-        client_name: selectedDeal.client_name,
-        contact_number: selectedDeal.contact_number,
+        client_name: selectedDeal.client_name || "",
+        contact_number: selectedDeal.contact_number || "",
+        alternate_contact: leadData.alternate_contact || "",
         email: selectedDeal.email || "",
         business_name: selectedDeal.business_name || "",
         business_type: selectedDeal.business_type || "",
+        website: leadData.website || "",
+        service_type: leadData.service_required || "video_editing",
+        service_details: selectedDeal.notes || leadData.requirements || "",
+        project_scope: "",
+        deliverables: "",
+        timeline: "",
         total_amount: updateData.deal_value || selectedDeal.deal_value || 0,
         amount_paid: updateData.payment_amount || 0,
-        payment_status: updateData.payment_status || "partially_paid",
-        service_details: selectedDeal.notes || "",
+        payment_status: updateData.payment_status || "not_received",
+        payment_method: "upi",
+        invoice_number: "",
+        address: "",
+        city: leadData.city || "",
+        state: leadData.state || "",
+        pincode: "",
+        project_start_date: "",
+        project_deadline: "",
+        client_requirements: leadData.requirements || "",
+        special_instructions: "",
+        preferred_communication: "whatsapp",
+        social_media_manager_name: "",
       });
       setShowOnboardingModal(true);
     }
@@ -190,15 +221,32 @@ const Deals = () => {
 const handleOnboardingSubmit = async (e) => {
   e.preventDefault();
   try {
-    await createOnboardingApi({
-      ...onboardingData,
-      deal_id: closedDeal._id,
-    });
-    alert("Onboarding completed successfully! Client added to onboarding.");
+    // ✅ Backend already auto-created onboarding when deal was closed
+    // So we need to UPDATE the existing one, not create new
+    const allOnboardings = await getAllOnboardingsApi();
+    const existing = allOnboardings.data.data.find(
+      (o) =>
+        o.deal_ref?._id === closedDeal._id ||
+        o.deal_ref === closedDeal._id
+    );
+
+    if (existing) {
+      // Update existing onboarding with detailed form data
+      await updateOnboardingApi(existing._id, onboardingData);
+      alert("✅ Onboarding details saved successfully!");
+    } else {
+      // Fallback - create new (shouldn't normally happen)
+      await createOnboardingApi({
+        ...onboardingData,
+        deal_id: closedDeal._id,
+      });
+      alert("✅ Onboarding created successfully!");
+    }
+
     setShowOnboardingModal(false);
     fetchDeals();
   } catch (error) {
-    alert(error.response?.data?.message || "Error creating onboarding");
+    alert(error.response?.data?.message || "Error saving onboarding");
   }
 };
 
@@ -550,6 +598,10 @@ const handleOnboardingSubmit = async (e) => {
                 <label>Email</label>
                 <span>{selectedDeal.email || "-"}</span>
               </div>
+              <div className="detail-item">
+              <label>Lead Qualifier</label>
+              <span>{selectedDeal.qualifier_name || "-"}</span>
+            </div>
             </div>
 
             {selectedDeal.notes && (
@@ -652,25 +704,28 @@ const handleOnboardingSubmit = async (e) => {
                     className="form-select"
                     value={updateData.deal_stage}
                     onChange={(e) =>
-                      setUpdateData({
-                        ...updateData,
-                        deal_stage: e.target.value,
-                      })
+                      setUpdateData({ ...updateData, deal_stage: e.target.value })
                     }
                   >
-                    <option value="meeting_scheduled">
-                      Meeting Scheduled
-                    </option>
-                    <option value="meeting_done">Meeting Done</option>
-                    <option value="proposal_sent">Proposal Sent</option>
-                    <option value="negotiation">Negotiation</option>
-                    <option value="verbal_confirmation">
-                      Verbal Confirmation
-                    </option>
-                    <option value="payment_pending">Payment Pending</option>
-                    <option value="closed_won">Closed Won ✅</option>
-                    <option value="closed_lost">Closed Lost ❌</option>
-                    <option value="on_hold">On Hold</option>
+                    {hasRole(["sales_closer"]) ? (
+                      <>
+                        <option value="">-- Select Stage --</option>
+                        <option value="closed_won">Closed Won ✅</option>
+                        <option value="closed_lost">Closed Lost ❌</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="meeting_scheduled">Meeting Scheduled</option>
+                        <option value="meeting_done">Meeting Done</option>
+                        <option value="proposal_sent">Proposal Sent</option>
+                        <option value="negotiation">Negotiation</option>
+                        <option value="verbal_confirmation">Verbal Confirmation</option>
+                        <option value="payment_pending">Payment Pending</option>
+                        <option value="closed_won">Closed Won ✅</option>
+                        <option value="closed_lost">Closed Lost ❌</option>
+                        <option value="on_hold">On Hold</option>
+                      </>
+                    )}
                   </select>
                 </div>
                 <div className="form-group">
@@ -702,7 +757,8 @@ const handleOnboardingSubmit = async (e) => {
                       })
                     }
                   >
-                   <option value="partially_paid">Partially Paid</option>
+                   <option value="not_received">Not Received</option>
+                  <option value="partially_paid">Partially Paid</option>
                   <option value="fully_paid">Fully Paid</option>
                   </select>
                 </div>
@@ -1033,13 +1089,34 @@ const handleOnboardingSubmit = async (e) => {
               }
               required
             >
-              <option value="video_shoot">Video Shoot</option>
-              <option value="video_editing">Video Editing</option>
-              <option value="web_development">Web Development</option>
-              <option value="social_media_management">Social Media Management</option>
-              <option value="other">Other</option>
+             <option value="video_shoot">Video Shoot</option>
+            <option value="video_editing">Video Editing</option>
+            <option value="web_development">Web Development</option>
             </select>
           </div>
+          {/* ✅ Show only when service is video_editing */}
+          {onboardingData.service_type === "video_editing" && (
+            <div className="form-group">
+              <label className="form-label">
+                Social Media Manager Name
+                <span style={{ color: "#797e88", fontSize: "11px", marginLeft: "6px" }}>
+                  (Optional - for managing client's social media)
+                </span>
+              </label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="e.g. Priya Sharma"
+                value={onboardingData.social_media_manager_name || ""}
+                onChange={(e) =>
+                  setOnboardingData({
+                    ...onboardingData,
+                    social_media_manager_name: e.target.value,
+                  })
+                }
+              />
+            </div>
+          )}
           <div className="form-group">
             <label className="form-label">Timeline</label>
             <input
@@ -1064,7 +1141,6 @@ const handleOnboardingSubmit = async (e) => {
             onChange={(e) =>
               setOnboardingData({ ...onboardingData, service_details: e.target.value })
             }
-            required
           ></textarea>
         </div>
 

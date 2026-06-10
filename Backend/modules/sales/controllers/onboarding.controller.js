@@ -3,6 +3,7 @@ import Deal from "../models/deal.model.js";
 import Lead from "../models/lead.model.js";
 import User from "../../../shared/models/user.model.js";
 import Notification from "../../../shared/models/notification.model.js";
+import crypto from "crypto";
 
 // ─── Create Onboarding (when deal is closed_won) ──────────────────────────────
 export const createOnboarding = async (req, res) => {
@@ -125,6 +126,12 @@ export const createOnboarding = async (req, res) => {
         type: "deal_updated",
         ref_id: onboarding._id,
         ref_model: "Deal",
+      });
+    }
+
+    if (deal.lead_ref) {
+      await Lead.findByIdAndUpdate(deal.lead_ref, {
+        current_stage: "onboard",
       });
     }
 
@@ -359,3 +366,131 @@ export const deleteOnboarding = async (req, res) => {
     });
   }
 };
+
+
+
+
+// ─── Generate Credential Collection Link ──────────────────────────────────────
+export const generateCredentialLink = async (req, res) => {
+  try {
+    const onboarding = await Onboarding.findById(req.params.id);
+    if (!onboarding) {
+      return res.status(404).json({
+        success: false,
+        message: "Onboarding not found.",
+      });
+    }
+
+    if (onboarding.service_type !== "video_editing") {
+      return res.status(400).json({
+        success: false,
+        message: "Credentials can only be collected for Video Editing service.",
+      });
+    }
+
+    // Generate unique token
+    const token = crypto.randomBytes(32).toString("hex");
+
+    await Onboarding.findByIdAndUpdate(req.params.id, {
+      credential_token: token,
+      credential_token_used: false,
+    });
+
+    const link = `${req.protocol}://${req.get("host").replace("5001", "5173")}/credentials/${token}`;
+
+    res.status(200).json({
+      success: true,
+      message: "Credential link generated.",
+      link,
+      token,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Server error.",
+      error: error.message,
+    });
+  }
+};
+
+// ─── Get Onboarding by Token (Public - for client) ────────────────────────────
+export const getOnboardingByToken = async (req, res) => {
+  try {
+    const onboarding = await Onboarding.findOne({
+      credential_token: req.params.token,
+    }).select("client_name business_name service_type credential_token_used");
+
+    if (!onboarding) {
+      return res.status(404).json({
+        success: false,
+        message: "Invalid or expired link.",
+      });
+    }
+
+    if (onboarding.credential_token_used) {
+      return res.status(400).json({
+        success: false,
+        message: "This form has already been submitted.",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        client_name: onboarding.client_name,
+        business_name: onboarding.business_name,
+        service_type: onboarding.service_type,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Server error.",
+      error: error.message,
+    });
+  }
+};
+
+// ─── Submit Credentials (Public - by client) ──────────────────────────────────
+export const submitCredentials = async (req, res) => {
+  try {
+    const onboarding = await Onboarding.findOne({
+      credential_token: req.params.token,
+    });
+
+    if (!onboarding) {
+      return res.status(404).json({
+        success: false,
+        message: "Invalid link.",
+      });
+    }
+
+    if (onboarding.credential_token_used) {
+      return res.status(400).json({
+        success: false,
+        message: "Already submitted.",
+      });
+    }
+
+    await Onboarding.findByIdAndUpdate(onboarding._id, {
+      collected_credentials: {
+        ...req.body,
+        submitted_at: new Date(),
+      },
+      credential_token_used: true,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Thank you! Your credentials have been submitted successfully.",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Server error.",
+      error: error.message,
+    });
+  }
+};
+
+

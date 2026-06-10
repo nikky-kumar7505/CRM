@@ -42,7 +42,6 @@ const SERVICE_OPTIONS = [
   { value: "video_shoot", label: "Video Shoot" },
   { value: "video_editing", label: "Video Editing" },
   { value: "web_development", label: "Web Development" },
-  { value: "social_media_management", label: "Social Media Management" },
 ];
 
 const Leads = () => {
@@ -115,8 +114,8 @@ const Leads = () => {
 });
 
   const [assignData, setAssignData] = useState({ qualifier_id: "" });
-  const [callLogData, setCallLogData] = useState({
-  calling_status: "interested",
+const [callLogData, setCallLogData] = useState({
+  calling_status: "",   // ✅ empty by default
   comment: "",
   requirements: "",
   budget: "",
@@ -339,7 +338,8 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
     const updateFields = {};
     if (callLogData.budget) updateFields.budget = callLogData.budget;
     if (callLogData.requirements) updateFields.requirements = callLogData.requirements;
-    if (callLogData.expected_closing_date) updateFields.next_follow_up_date = callLogData.expected_closing_date;
+    if (callLogData.expected_closing_date) updateFields.expected_closing_date = callLogData.expected_closing_date;
+    if (callLogData.next_follow_up_date) updateFields.next_follow_up_date = callLogData.next_follow_up_date;
     if (callLogData.priority) updateFields.priority = callLogData.priority;
     if (callLogData.next_follow_up_date) updateFields.next_follow_up_date = callLogData.next_follow_up_date;
 
@@ -374,11 +374,15 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
     }
   };
 
-  const handlePassToCloser = async (lead) => {
+    const handlePassToCloser = async (lead) => {
     if (window.confirm(`Pass "${lead.lead_name}" to Sales Closer?`)) {
       try {
-        await passToCloserApi(lead._id);
-        alert("Lead passed to Sales Closer!");
+        const res = await passToCloserApi(lead._id);
+        // ✅ Green success popup with closer name
+        const closerName = res.data.closer_name || "Unassigned";
+        setAutoAssignInfo(
+          `✅ Lead "${lead.lead_name}" successfully passed to closer: ${closerName}`
+        );
         fetchLeads();
       } catch (error) {
         alert(error.response?.data?.message || "Error");
@@ -398,23 +402,19 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
     }
   };
 
- const getStageBadge = (stage) => {
+  const getStageBadge = (stage) => {
   const map = {
-    new: "badge-info",
-    fresh: "badge-info",         // ✅ ADD
-    interested: "badge-primary",
-    contacted: "badge-warning",  // ✅ CHANGED color
-    follow_up: "badge-warning",
-    proposal_sent: "badge-gold",
-    negotiation: "badge-warning",
-    hot_lead: "badge-danger",
-    meeting_scheduled: "badge-primary",
+    fresh: "badge-info",
+    lead_qualifier: "badge-warning",
+    sales_closer: "badge-primary",
     closed_won: "badge-success",
     closed_lost: "badge-danger",
-    not_interested: "badge-danger",
+    onboard: "badge-success",
   };
   return map[stage] || "badge-info";
 };
+
+
 
   const getServiceLabel = (val) => {
     const found = SERVICE_OPTIONS.find((s) => s.value === val);
@@ -496,16 +496,12 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
             style={{ maxWidth: "160px" }}
           >
             <option value="">All Stages</option>
-            <option value="new">New</option>
-             <option value="fresh">Fresh</option>
-            <option value="interested">Interested</option>
-            <option value="contacted">Contacted</option>
-            <option value="follow_up">Follow Up</option>
-            <option value="hot_lead">Hot Lead</option>
-            <option value="proposal_sent">Proposal Sent</option>
-            <option value="negotiation">Negotiation</option>
+            <option value="fresh">Fresh</option>
+            <option value="lead_qualifier">Lead Qualifier</option>
+            <option value="sales_closer">Sales Closer</option>
             <option value="closed_won">Closed Won</option>
             <option value="closed_lost">Closed Lost</option>
+            <option value="onboard">Onboard</option>
           </select>
 
           <select
@@ -557,8 +553,10 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
               <th>Service</th>
               <th>Stage</th>
               <th>Priority</th>
-              {!hasRole(["lead_qualifier"]) && <th>Assigned To</th>}
+              {!hasRole(["lead_qualifier"]) && <th>Lead Qualifier</th>}
+              {!hasRole(["lead_qualifier"]) && <th>Closer</th>}
               {hasRole(["lead_qualifier"]) && <th>Assigned By</th>}
+              {hasRole(["lead_qualifier"]) && <th>Closer</th>}
               <th>Calls</th>
               <th>Actions</th>
             </tr>
@@ -660,8 +658,30 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
                  {!hasRole(["lead_qualifier"]) && (
                     <td>{lead.assigned_to_name || "Unassigned"}</td>
                   )}
+                  {!hasRole(["lead_qualifier"]) && (
+                    <td>
+                      {lead.assigned_closer_name ? (
+                        <span style={{ color: "#10443e", fontWeight: 500 }}>
+                          {lead.assigned_closer_name}
+                        </span>
+                      ) : (
+                        <span style={{ color: "#797e88", fontStyle: "italic" }}>Pending</span>
+                      )}
+                    </td>
+                  )}
                   {hasRole(["lead_qualifier"]) && (
                     <td>{lead.assigned_by_name || "-"}</td>
+                  )}
+                  {hasRole(["lead_qualifier"]) && (
+                    <td>
+                      {lead.assigned_closer_name ? (
+                        <span style={{ color: "#10443e", fontWeight: 500 }}>
+                          {lead.assigned_closer_name}
+                        </span>
+                      ) : (
+                        <span style={{ color: "#797e88", fontStyle: "italic" }}>Pending</span>
+                      )}
+                    </td>
                   )}
 
                   <td>{lead.total_calls}</td>
@@ -1215,9 +1235,10 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
                     onChange={handleEditChange}
                   >
                     <option value="low">Low</option>
-                    <option value="medium">Medium</option>
                     <option value="high">High</option>
                     <option value="urgent">Urgent</option>
+                    <option value="hot">Hot 🔥</option>
+
                   </select>
                 </div>
               </div>
@@ -1234,13 +1255,14 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
                     placeholder="Client budget"
                   />
                 </div>
+                <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Lead Source</label>
                   <select
                     name="lead_source"
                     className="form-select"
-                    value={editFormData.lead_source}
-                    onChange={handleEditChange}
+                    value={formData.lead_source}
+                    onChange={handleChange}
                   >
                     <option value="instagram">Instagram</option>
                     <option value="facebook">Facebook</option>
@@ -1252,6 +1274,9 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
                     <option value="other">Other</option>
                   </select>
                 </div>
+
+                
+              </div>
               </div>
 
               <div className="form-row">
@@ -1291,15 +1316,10 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
                     onChange={handleEditChange}
                   >
                     <option value="pending">Pending</option>
-                    <option value="contacted">Contacted</option>
                     <option value="interested">Interested</option>
                     <option value="not_interested">Not Interested</option>
-                    <option value="busy">Busy</option>
-                    <option value="switched_off">Switched Off</option>
-                    <option value="no_answer">No Answer</option>
-                    <option value="cut_call">Cut Call</option>
-                    <option value="wrong_number">Wrong Number</option>
                     <option value="callback_requested">Callback Requested</option>
+                    <option value="no_answer">No Answer</option>
                   </select>
                 </div>
                 <div className="form-group">
@@ -1635,18 +1655,17 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
                       className="form-select"
                       value={callLogData.calling_status}
                       onChange={(e) =>
-                        setCallLogData({
-                          ...callLogData,
-                          calling_status: e.target.value,
-                        })
+                        setCallLogData({ ...callLogData, calling_status: e.target.value })
                       }
+                      required
                     >
+                      <option value="">-- Set Calling Status --</option>
                       <option value="interested">Interested</option>
                       <option value="not_interested">Not Interested</option>
                       <option value="callback_requested">Callback Requested</option>
                       <option value="no_answer">No Answer</option>
                     </select>
-                  </div>
+                                      </div>
 
                   {/* ✅ Add Priority dropdown AFTER calling status */}
                   <div className="form-group">
@@ -1666,8 +1685,8 @@ Vikram Brand,7654321098,vikram@gmail.com,web_development,referral,Bangalore,Karn
                     </select>
                   </div>
 
-                  {/* ✅ Show Follow Up Date when priority is "low" and status is "not_interested" */}
-                  {callLogData.priority === "low" && callLogData.calling_status === "not_interested" && (
+                  {/* ✅ Show Follow Up Date when priority = low (independent of status) */}
+                  {callLogData.priority === "low" && (
                     <div className="form-group">
                       <label className="form-label">
                         Next Follow Up Date *

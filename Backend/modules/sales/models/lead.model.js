@@ -136,6 +136,16 @@ const leadSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    
+    assigned_closer: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    assigned_closer_name: {
+      type: String,
+      default: null,
+    },
 
     assignment_date: {
       type: Date,
@@ -144,23 +154,17 @@ const leadSchema = new mongoose.Schema(
 
     // ─── Current Stage ────────────────────────────────────────
     current_stage: {
-  type: String,
-  enum: [
-    "new",
-    "fresh",           // ✅ NEW - just assigned, not contacted yet
-    "not_interested",
-    "interested",
-    "contacted",
-    "follow_up",
-    "proposal_sent",
-    "negotiation",
-    "hot_lead",
-    "meeting_scheduled",
-    "closed_won",
-    "closed_lost",
-  ],
-  default: "new",
-},
+    type: String,
+    enum: [
+      "fresh",
+      "lead_qualifier",
+      "sales_closer",
+      "closed_won",
+      "closed_lost",
+      "onboard",
+    ],
+    default: "fresh",
+  },
 
     // ─── Calling Info ─────────────────────────────────────────
     first_calling_date: {
@@ -174,23 +178,24 @@ const leadSchema = new mongoose.Schema(
     },
 
     calling_status: {
-      type: String,
+    type: String,
       enum: [
-        "switched_off",
-        "busy",
-        "contacted",
-        "not_interested",
+        "pending",
         "interested",
-        "cut_call",
-        "wrong_number",
-        "no_answer",
+        "not_interested",
         "callback_requested",
-        "pending", // default - not called yet
+        "no_answer",
       ],
       default: "pending",
     },
 
+   
     next_follow_up_date: {
+      type: Date,
+      default: null,
+    },
+
+    expected_closing_date: {
       type: Date,
       default: null,
     },

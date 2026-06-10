@@ -17,3 +17,12 @@ export const assignTeamMemberApi = (id, data) =>
 
 export const deleteOnboardingApi = (id) =>
   API.delete(`/sales/onboarding/${id}`);
+
+export const generateCredentialLinkApi = (id) =>
+  API.post(`/sales/onboarding/${id}/generate-credential-link`);
+
+export const getOnboardingByTokenApi = (token) =>
+  API.get(`/sales/onboarding/public/${token}`);
+
+export const submitCredentialsApi = (token, data) =>
+  API.post(`/sales/onboarding/public/${token}/submit`, data);

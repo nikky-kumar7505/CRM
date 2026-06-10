@@ -6,6 +6,9 @@ import {
   updateOnboarding,
   assignTeamMember,
   deleteOnboarding,
+  generateCredentialLink,
+  getOnboardingByToken,
+  submitCredentials,
 } from "../controllers/onboarding.controller.js";
 import {
   protect,
@@ -19,10 +22,14 @@ import {
 
 const router = express.Router();
 
+// ─── PUBLIC Routes (client uses these) ────────────────────
+router.get("/public/:token", getOnboardingByToken);
+router.post("/public/:token/submit", submitCredentials);
+
+// ─── Protected Routes ─────────────────────────────────────
 router.use(protect);
 router.use(checkCRMAccess("sales"));
 
-// ─── CRUD Routes ──────────────────────────────────────────
 router
   .route("/")
   .get(getAllOnboardings)
@@ -40,7 +47,13 @@ router
   )
   .delete(adminOnly, deleteOnboarding);
 
-// ─── Assign Team Member (Admin and Manager only) ──────────
 router.put("/:id/assign", managerOrAdmin, assignTeamMember);
+
+// ✅ Generate credential link (Admin, Manager, Closer)
+router.post(
+  "/:id/generate-credential-link",
+  authorizeRoles("admin", "sales_manager", "sales_closer"),
+  generateCredentialLink
+);
 
 export default router;

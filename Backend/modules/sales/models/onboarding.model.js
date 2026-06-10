@@ -56,13 +56,7 @@ const onboardingSchema = new mongoose.Schema(
     // ─── Service Information ─────────────────────────────────
     service_type: {
       type: String,
-      enum: [
-        "video_shoot",
-        "video_editing",
-        "web_development",
-        "social_media_management",
-        "other",
-      ],
+      enum: ["video_shoot", "video_editing", "web_development"],
       required: true,
     },
 
@@ -197,6 +191,41 @@ const onboardingSchema = new mongoose.Schema(
       type: String,
       enum: ["whatsapp", "email", "phone", "other"],
       default: "whatsapp",
+    },
+
+    // ─── Social Media Manager (only for video_editing service) ───
+    social_media_manager_name: {
+      type: String,
+      default: null,
+    },
+
+    // ─── Credential Collection Token ──────────────────────────
+    credential_token: {
+      type: String,
+      default: null,
+    },
+    credential_token_used: {
+      type: Boolean,
+      default: false,
+    },
+
+    // ─── Collected Credentials from Client ────────────────────
+    collected_credentials: {
+      instagram_username: String,
+      instagram_password: String,
+      facebook_email: String,
+      facebook_password: String,
+      youtube_email: String,
+      youtube_password: String,
+      linkedin_email: String,
+      linkedin_password: String,
+      twitter_username: String,
+      twitter_password: String,
+      other_handle_name: String,
+      other_handle_username: String,
+      other_handle_password: String,
+      notes_from_client: String,
+      submitted_at: Date,
     },
   },
   {

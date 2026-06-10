@@ -4,6 +4,7 @@ import User from "../../../shared/models/user.model.js";
 import Notification from "../../../shared/models/notification.model.js";
 
 
+
 // ─── Create Lead ──────────────────────────────────────────────────────────────
 // POST /api/sales/leads
 // Admin, Sales Manager can create lead
@@ -23,6 +24,7 @@ export const createLead = async (req, res) => {
       lead_source_detail,
       budget,
       requirements,
+      priority,   
       service_required,  // ✅ NEW field
       tags,
       city,
@@ -89,7 +91,7 @@ export const createLead = async (req, res) => {
       budget,
       requirements,
       service_required,  // ✅ Save service_required
-      priority: "medium",
+      priority: req.body.priority || "medium",
       tags,
       city,
       state,
@@ -218,7 +220,7 @@ export const closeLeadByQualifier = async (req, res) => {
 export const getFollowUpLeads = async (req, res) => {
   try {
     let filter = {
-      next_follow_up_date: { $ne: null },
+      priority: "low",  // ✅ Only low priority leads
       current_stage: { $nin: ["closed_won", "closed_lost"] },
     };
 
@@ -227,7 +229,7 @@ export const getFollowUpLeads = async (req, res) => {
     }
 
     const leads = await Lead.find(filter)
-      .sort({ next_follow_up_date: 1 }) // closest date first
+      .sort({ next_follow_up_date: 1 })
       .populate("assigned_to", "name email employee_id");
 
     res.status(200).json({
@@ -459,14 +461,9 @@ export const updateLead = async (req, res) => {
       }
     });
 
-    // ✅ Auto change stage if was fresh and any update happens
-    if (lead.current_stage === "fresh") {
-      lead.current_stage = "contacted";
-    }
-
-    // ✅ Auto change stage to hot_lead if priority set to hot
-    if (req.body.priority === "hot") {
-      lead.current_stage = "hot_lead";
+    // ✅ When qualifier updates anything, stage becomes lead_qualifier
+    if (lead.current_stage === "fresh" && req.user.role === "lead_qualifier") {
+      lead.current_stage = "lead_qualifier";
     }
 
     await lead.save();
@@ -633,19 +630,9 @@ export const addCallLog = async (req, res) => {
     }
 
     // ✅ AUTO change stage based on calling_status
-    if (lead.current_stage === "fresh" || lead.current_stage === "new") {
-      // First contact - move from fresh to contacted
-      lead.current_stage = "contacted";
-    }
-
-    // ✅ Map calling status to lead stage
-    if (calling_status === "interested") {
-      lead.current_stage = "interested";
-    } else if (calling_status === "not_interested") {
-      lead.current_stage = "not_interested";
-    } else if (calling_status === "callback_requested") {
-      lead.current_stage = "follow_up";
-    }
+   if (lead.current_stage === "fresh") {
+    lead.current_stage = "lead_qualifier";
+  }
 
     await lead.save();
 
@@ -712,34 +699,118 @@ export const passLeadToCloser = async (req, res) => {
       });
     }
 
+    // ─── Auto assign to Sales Closer with least deals ────────
+    const closers = await User.find({
+      role: "sales_closer",
+      is_active: true,
+    }).lean();
+
+    let closerAssigned = null;
+    let closerName = null;
+
+    if (closers.length > 0) {
+      const closerDealCounts = await Promise.all(
+        closers.map(async (c) => {
+          const count = await Deal.countDocuments({ assigned_to: c._id });
+          return { ...c, dealCount: count };
+        })
+      );
+
+      const leastBusy = closerDealCounts.reduce((prev, curr) =>
+        prev.dealCount <= curr.dealCount ? prev : curr
+      );
+
+      closerAssigned = leastBusy._id;
+      closerName = leastBusy.name;
+    }
+
+    // ─── Update lead ─────────────────────────────────────────
     await Lead.findByIdAndUpdate(lead._id, {
       is_passed_to_closer: true,
       passed_to_closer_date: new Date(),
       passed_to_closer_by: req.user._id,
-      current_stage: "meeting_scheduled",
+      current_stage: "sales_closer",
+      assigned_closer: closerAssigned,
+      assigned_closer_name: closerName,
     });
 
-    // ─── Notify all sales closers ─────────────────────────────
-    const salesClosers = await User.find({
-      role: "sales_closer",
+    // ─── Auto create Deal ────────────────────────────────────
+    const lastDeal = await Deal.findOne({}, { deal_id: 1 })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    let dealNumber = 1;
+    if (lastDeal && lastDeal.deal_id) {
+      const lastNum = parseInt(
+        lastDeal.deal_id.replace("DEAL-", "").replace("SWZ-D-", "")
+      );
+      if (!isNaN(lastNum)) {
+        dealNumber = lastNum + 1;
+      }
+    }
+
+    const deal_id = `SWZ-D-${String(dealNumber).padStart(4, "0")}`;
+
+    const deal = await Deal.create({
+      deal_id,
+      lead_ref: lead._id,
+      lead_id: lead.lead_id,
+      client_name: lead.lead_name,
+      contact_number: lead.contact_number,
+      email: lead.email,
+      business_type: lead.business_type,
+      business_name: lead.business_name,
+      assigned_to: closerAssigned,
+      assigned_to_name: closerName,
+      assigned_by: req.user._id,
+      assigned_by_name: req.user.name,
+      qualifier_id: lead.assigned_to,
+      qualifier_name: lead.assigned_to_name,
+      deal_value: lead.budget ? parseInt(lead.budget) : 0,
+      notes: lead.requirements || "",
+      payment_status: "not_received",
+      created_by: req.user._id,
+    });
+
+    // ─── Notify assigned closer ─────────────────────────────
+    if (closerAssigned) {
+      await Notification.create({
+        user_id: closerAssigned,
+        title: "New Deal Assigned",
+        message: `Deal for "${lead.lead_name}" has been auto-assigned to you. Passed by ${req.user.name}.`,
+        type: "deal_assigned",
+        ref_id: deal._id,
+        ref_model: "Deal",
+      });
+    }
+
+    // ─── Notify all admins and managers ─────────────────────
+    const adminsAndManagers = await User.find({
+      role: { $in: ["admin", "sales_manager"] },
       is_active: true,
     });
 
-    if (salesClosers.length > 0) {
-      const notifs = salesClosers.map((closer) => ({
-        user_id: closer._id,
-        title: "New Lead Ready for Closing",
-        message: `Lead "${lead.lead_name}" is ready for meeting. Passed by ${req.user.name}.`,
+    for (const person of adminsAndManagers) {
+      await Notification.create({
+        user_id: person._id,
+        title: "Lead Passed to Closer",
+        message: `Lead "${lead.lead_name}" passed to closer ${
+          closerName || "unassigned"
+        } by ${req.user.name}.`,
         type: "lead_passed",
         ref_id: lead._id,
         ref_model: "Lead",
-      }));
-      await Notification.insertMany(notifs);
+      });
     }
 
     res.status(200).json({
       success: true,
-      message: "Lead passed to Sales Closer successfully.",
+      message: `Lead passed and deal auto-assigned to ${
+        closerName || "no closer available"
+      }.`,
+      closer_name: closerName,
+      closer_id: closerAssigned,
+      deal: deal,
     });
   } catch (error) {
     res.status(500).json({

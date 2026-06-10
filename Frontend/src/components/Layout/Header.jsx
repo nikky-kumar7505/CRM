@@ -14,12 +14,25 @@ const Header = ({ toggleSidebar, sidebarOpen }) => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const notifRef = useRef(null);
+  const [prevUnreadCount, setPrevUnreadCount] = useState(0);
+  const audioRef = useRef(null);
 
-  useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
-  }, []);
+
+useEffect(() => {
+  const initLoad = async () => {
+    try {
+      const res = await getNotificationsApi();
+      setNotifications(res.data.data);
+      setUnreadCount(res.data.unread_count);
+      setPrevUnreadCount(res.data.unread_count);
+    } catch (e) {}
+  };
+  initLoad();
+  const interval = setInterval(fetchNotifications, 30000);
+  return () => clearInterval(interval);
+}, []);
+
+
 
   // ✅ Close notification dropdown when clicking outside
   useEffect(() => {
@@ -32,15 +45,23 @@ const Header = ({ toggleSidebar, sidebarOpen }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const fetchNotifications = async () => {
-    try {
-      const res = await getNotificationsApi();
-      setNotifications(res.data.data);
-      setUnreadCount(res.data.unread_count);
-    } catch (error) {
-      console.log("Notification fetch failed");
+ const fetchNotifications = async () => {
+  try {
+    const res = await getNotificationsApi();
+    const newUnread = res.data.unread_count;
+
+    // ✅ Play sound if new notification arrived
+    if (newUnread > prevUnreadCount && prevUnreadCount > 0 && audioRef.current) {
+      audioRef.current.play().catch((e) => console.log("Audio play blocked"));
     }
-  };
+
+    setNotifications(res.data.data);
+    setUnreadCount(newUnread);
+    setPrevUnreadCount(newUnread);
+  } catch (error) {
+    console.log("Notification fetch failed");
+  }
+};
 
   const handleMarkRead = async (id) => {
     try {
@@ -74,6 +95,7 @@ const Header = ({ toggleSidebar, sidebarOpen }) => {
       <div className="header-right">
         {/* ─── Notification Bell ─────────────────────── */}
         <div style={{ position: "relative" }} ref={notifRef}>
+          <audio ref={audioRef} src="/alert.mp3" preload="auto" />
           <button
             className="header-icon-btn"
             onClick={() => setShowNotifications(!showNotifications)}
