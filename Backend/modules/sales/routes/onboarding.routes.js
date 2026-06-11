@@ -6,6 +6,7 @@ import {
   updateOnboarding,
   assignTeamMember,
   deleteOnboarding,
+  getMyAssignedClients,
 } from "../controllers/onboarding.controller.js";
 import {
   protect,
@@ -20,7 +21,7 @@ import {
 const router = express.Router();
 
 router.use(protect);
-router.use(checkCRMAccess("sales"));
+// router.use(checkCRMAccess("sales"));
 
 // ─── CRUD Routes ──────────────────────────────────────────
 router
@@ -30,7 +31,11 @@ router
     authorizeRoles("admin", "sales_manager", "sales_closer"),
     createOnboarding
   );
-
+router.get(
+  "/my-assigned",
+  protect,
+  getMyAssignedClients
+);
 router
   .route("/:id")
   .get(getSingleOnboarding)
@@ -41,6 +46,7 @@ router
   .delete(adminOnly, deleteOnboarding);
 
 // ─── Assign Team Member (Admin and Manager only) ──────────
-router.put("/:id/assign", managerOrAdmin, assignTeamMember);
+router.put("/:id/assign", managerOrAdmin("admin", "sales_manager"), assignTeamMember);
+
 
 export default router;

@@ -1,5 +1,6 @@
 import DailyReport from "../models/dailyReport.model.js";
 import reportTemplateModel from "../models/reportTemplate.model.js";
+import Onboarding from "../../sales/models/onboarding.model.js";
 import User from "../../../shared/models/user.model.js";
 
 const getManagedEmployeeIds = async (managerId) => {
@@ -47,9 +48,42 @@ export const getMyTemplate = async (req, res) => {
       });
     }
 
+    const templateObj = template.toObject();
+
+    const assignedClientFields = templateObj.fields.filter(
+  (field) => field.source === "assignedClients"
+);
+
+if (assignedClientFields.length > 0) {
+  const onboardings = await Onboarding.find({
+    assigned_team_member: req.user._id,
+  })
+    .select("client_name")
+    .lean();
+
+  const clients = [
+    ...new Set(
+      onboardings
+        .map((onboarding) => onboarding.client_name)
+        .filter(Boolean)
+    ),
+  ];
+
+  templateObj.fields = templateObj.fields.map((field) => {
+    if (field.source === "assignedClients") {
+      return {
+        ...field,
+        options: clients,
+      };
+    }
+
+    return field;
+  });
+}
+
     return res.status(200).json({
       success: true,
-      data: template,
+      data: templateObj,
     });
   } catch (error) {
     return res.status(500).json({

@@ -59,6 +59,15 @@ const DEFAULT_ROLE_CONFIGS = [
     isManager: false,
     isActive: true,
   },
+  {
+    key: "web_developer",
+    label: "Web Developer",
+    department: "Technical",
+    allowedModules: ["daily"],
+    landingPath: "/daily/dashboard",
+    isManager: false,
+    isActive: true,
+  },
 ];
 
 const DEFAULT_ROLE_MAP = new Map(

@@ -21,3 +21,5 @@ export const deleteTemplateApi = (templateId) =>
 export const getWeeklyPerformanceApi = () => API.get("/daily/performance/weekly");
 export const getMonthlyPerformanceApi = () => API.get("/daily/performance/monthly");
 export const getTeamPerformanceApi = () => API.get("/daily/team/performance");
+export const getMyAssignedClientsApi = () =>
+  API.get("/sales/onboarding/my-assigned");

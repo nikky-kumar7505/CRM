@@ -31,6 +31,17 @@ const fieldSchema = new mongoose.Schema(
       default: false,
     },
 
+    source: {
+      type: String,
+      enum: [
+        "custom",
+        "assignedClients",
+        "assignedProjects",
+        "teamMembers",
+      ],
+      default: "custom",
+    },
+
     options: [
       {
         type: String,

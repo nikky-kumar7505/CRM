@@ -4,6 +4,25 @@ import { getRolesApi } from "../../api/rolesApi.js";
 import "./DailyTask.css";
 import "./TemplatesPage.css";
 
+
+const SELECT_SOURCES = [
+  {
+    value: "custom",
+    label: "Custom Options",
+  },
+  {
+    value: "assignedClients",
+    label: "Assigned Clients",
+  },
+  {
+    value: "assignedProjects",
+    label: "Assigned Projects",
+  },
+  {
+    value: "teamMembers",
+    label: "Team Members",
+  },
+];
 const TemplatesPage = () => {
   const {
     getTemplates,
@@ -28,6 +47,8 @@ const TemplatesPage = () => {
     try {
       const response = await getTemplates();
       setTemplates(response.data || []);
+      console.log(response.data);
+      
     } catch (error) {
       console.error(error);
     }
@@ -112,6 +133,11 @@ const TemplatesPage = () => {
 
   updatedFields[index][field] = value;
 
+  if (field === "label") {
+    updatedFields[index].key =
+      toCamelCase(value);
+  }
+
   if (field === "optionsText") {
     updatedFields[index].options = value
       .split(",")
@@ -143,7 +169,7 @@ const TemplatesPage = () => {
     }
   };
 
-  const addField = () => {
+ const addField = () => {
   setSelectedTemplate({
     ...selectedTemplate,
     fields: [
@@ -154,6 +180,8 @@ const TemplatesPage = () => {
         type: "text",
         required: false,
         options: [],
+        optionsText: "",
+        source: "custom",
       },
     ],
   });
@@ -173,11 +201,20 @@ const openEdit = (template) => {
     JSON.stringify(template)
   );
 
-  cloned.fields = cloned.fields.map((field) => ({
-    ...field,
-    options: field.options || [],
-    optionsText: (field.options || []).join(", "),
-  }));
+  cloned.fields = cloned.fields.map(
+    (field) => ({
+      ...field,
+      source:
+        field.source ||
+        "custom",
+      options:
+        field.options || [],
+      optionsText:
+        (field.options || []).join(
+          ", "
+        ),
+    })
+  );
 
   setSelectedTemplate(cloned);
   setEditModal(true);
@@ -404,17 +441,31 @@ const openEdit = (template) => {
                   </label>
 
                   <input
-                    className="form-input"
-                    placeholder="Module Name"
-                    value={field.label}
-                    onChange={(e) =>
-                      handleFieldChange(
-                        index,
-                        "label",
-                        e.target.value
-                      )
-                    }
-                  />
+  className="form-input"
+  placeholder="Module Name"
+  value={field.label}
+  onChange={(e) =>
+    handleFieldChange(
+      index,
+      "label",
+      e.target.value
+    )
+  }
+/>
+
+<small
+  style={{
+    display: "block",
+    marginTop: "6px",
+    color: "#6b7280",
+  }}
+>
+  Generated Key:
+  {" "}
+  <strong>
+    {field.key}
+  </strong>
+</small>
                 </div>
               </div>
 
@@ -481,33 +532,62 @@ const openEdit = (template) => {
                 </div>
               </div>
 
-              {field.type === "select" && (
-                <div className="form-group">
-                  <label className="form-label">
-                    Options
-                  </label>
+              {field.type === "select" && field.source === "custom" && (
+  <div className="form-group">
+    <label className="form-label">
+      Data Source
+    </label>
 
-                  <input
-                    className="form-input"
-                    placeholder="Option1, Option2, Option3"
-                    value={field.optionsText || ""}
-                     onChange={(e) =>
-    handleFieldChange(
-      index,
-      "optionsText",
-      e.target.value
-    )
-  }
-                  />
+    <select
+      className="form-select"
+      value={field.source || "custom"}
+      onChange={(e) =>
+        handleFieldChange(
+          index,
+          "source",
+          e.target.value
+        )
+      }
+    >
+      {SELECT_SOURCES.map(
+        (source) => (
+          <option
+            key={source.value}
+            value={source.value}
+          >
+            {source.label}
+          </option>
+        )
+      )}
+    </select>
+  </div>
+)}
+{field.type === "select" &&
+ field.source ===
+   "assignedClients" && (
+  <div className="form-group">
+    <label className="form-label">
+      Source Preview
+    </label>
 
-                  <small>
-                    Separate options with commas
-                  </small>
-                </div>
-              )}
+    <div
+      className="card"
+      style={{
+        padding: "10px",
+      }}
+    >
+      Client list will be loaded
+      automatically from assigned
+      clients when the report form
+      is opened.
+    </div>
+  </div>
+)}
             </div>
+            
           )
         )}
+        
       </div>
 
       <div

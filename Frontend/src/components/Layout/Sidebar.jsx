@@ -26,9 +26,9 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   const moduleName = getModuleFromPath(location.pathname);
   const sidebar = getSidebarConfig(moduleName, user);
 // console.log(sidebar);
-console.log("MODULE:", moduleName);
-console.log("ROLE:", user);
-console.log("SIDEBAR:", sidebar);
+// console.log("MODULE:", moduleName);
+// console.log("ROLE:", user);
+// console.log("SIDEBAR:", sidebar);
 
   const handleLogout = () => {
     logout();

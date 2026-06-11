@@ -17,3 +17,6 @@ export const assignTeamMemberApi = (id, data) =>
 
 export const deleteOnboardingApi = (id) =>
   API.delete(`/sales/onboarding/${id}`);
+
+export const getMyAssignedClientsApi = () =>
+  API.get("/sales/onboarding/my-assigned");

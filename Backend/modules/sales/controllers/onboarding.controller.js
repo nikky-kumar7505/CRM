@@ -359,3 +359,25 @@ export const deleteOnboarding = async (req, res) => {
     });
   }
 };
+
+export const getMyAssignedClients = async (req, res) => {
+  try {
+    const onboardings = await Onboarding.find({
+      assigned_team_member: req.user._id,
+    })
+      .select("client_name _id")
+      .populate("assigned_team_member", "name email");
+
+    const clientNames = onboardings.map(o => o.client_name);
+
+    res.status(200).json({
+      success: true,
+      data: clientNames,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import "./CreateTemplate.css";
 import { useTemplate } from "../../../hooks/useTemplate";
 import { getRolesApi } from "../../../api/rolesApi.js";
+import { getAllOnboardingsApi } from "../../../api/onboardingApi.js";
 import "../DailyTask.css";
 
 const FIELD_TYPES = [
@@ -12,6 +13,25 @@ const FIELD_TYPES = [
   "date",
 ];
 
+const SELECT_SOURCES = [
+  {
+    value: "custom",
+    label: "Custom Options",
+  },
+  {
+    value: "assignedClients",
+    label: "Assigned Clients",
+  },
+  {
+    value: "assignedProjects",
+    label: "Assigned Projects",
+  },
+  {
+    value: "teamMembers",
+    label: "Team Members",
+  },
+];
+
 const CreateTemplate = () => {
   const [role, setRole] = useState("");
   const [roles, setRoles] = useState([]);
@@ -19,15 +39,39 @@ const CreateTemplate = () => {
   const { createTemplate, loading } = useTemplate();
   const [fields, setFields] = useState([
     {
-      key: "",
-      label: "",
-      type: "text",
-      required: false,
-      options: [],
-      optionsText: "",
-    },
+  key: "",
+  label: "",
+  type: "text",
+  required: false,
+  options: [],
+  optionsText: "",
+  source: "custom",
+}
   ]);
+const toCamelCase = (str = "") => {
+  return str
+    .trim()
+    .replace(/[^\w\s]/g, "")
+    .split(/\s+/)
+    .map((word, index) =>
+      index === 0
+        ? word.toLowerCase()
+        : word.charAt(0).toUpperCase() +
+          word.slice(1).toLowerCase()
+    )
+    .join("");
+};
+const handleLabelChange = (
+  index,
+  value
+) => {
+  const updated = [...fields];
 
+  updated[index].label = value;
+  updated[index].key = toCamelCase(value);
+
+  setFields(updated);
+};
   useEffect(() => {
     const loadRoles = async () => {
       try {
@@ -62,9 +106,41 @@ const CreateTemplate = () => {
         required: false,
         options: [],
         optionsText: "",
+        source: "custom",
       },
     ]);
   };
+
+  const [assignedClients, setAssignedClients] = useState([]);
+
+  useEffect(() => {
+    if (!role) {
+      setAssignedClients([]);
+      return;
+    }
+
+    const loadAssignedClients = async () => {
+      try {
+        const res = await getAllOnboardingsApi();
+        const onboardings = res.data.data || [];
+
+        const clients = onboardings
+          .filter((o) =>
+            String(o.team_member_role || "").trim().toLowerCase() ===
+            String(role || "").trim().toLowerCase()
+          )
+          .map((o) => o.client_name)
+          .filter(Boolean);
+
+        setAssignedClients([...new Set(clients)]);
+      } catch (error) {
+        console.error("Failed to load assigned clients:", error);
+        setAssignedClients([]);
+      }
+    };
+
+    loadAssignedClients();
+  }, [role]);
 
   const removeField = (index) => {
     setFields(fields.filter((_, i) => i !== index));
@@ -76,18 +152,30 @@ const CreateTemplate = () => {
     const payload = {
       role,
       fields: fields.map((field) => ({
-        key: field.key,
-        label: field.label,
-        type: field.type,
-        required: field.required,
-        options:
-          field.type === "select"
-            ? field.optionsText
-                .split(",")
-                .map((item) => item.trim())
-                .filter(Boolean)
-            : [],
-      })),
+  key: field.key,
+  label: field.label,
+  type: field.type,
+  required: field.required,
+  source:
+    field.type === "select"
+      ? field.source
+      : null,
+  options: (function() {
+    if (field.type !== "select") return [];
+    if (field.source === "custom") {
+      return (field.optionsText || "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+
+    if (field.source === "assignedClients") {
+      return assignedClients;
+    }
+
+    return [];
+  })(),
+})),
     };
 
     try {
@@ -102,6 +190,7 @@ const CreateTemplate = () => {
           required: false,
           options: [],
           optionsText: "",
+          source: "custom",
         },
       ]);
     } catch (error) {
@@ -182,7 +271,7 @@ const CreateTemplate = () => {
               </div>
 
               <div className="form-row">
-                <div className="form-group">
+                {/* <div className="form-group">
                   <label className="form-label">
                     Field Key
                   </label>
@@ -199,7 +288,7 @@ const CreateTemplate = () => {
                       )
                     }
                   />
-                </div>
+                </div> */}
 
                 <div className="form-group">
                   <label className="form-label">
@@ -211,9 +300,8 @@ const CreateTemplate = () => {
                     placeholder="Module Name"
                     value={field.label}
                     onChange={(e) =>
-                      handleFieldChange(
+                      handleLabelChange(
                         index,
-                        "label",
                         e.target.value
                       )
                     }
@@ -276,7 +364,7 @@ const CreateTemplate = () => {
                 </div>
               </div>
 
-              {field.type === "select" && (
+              {field.type === "select" && field.source === "custom" && (
                 <div className="form-group">
                   <label className="form-label">
                     Options
@@ -298,6 +386,48 @@ const CreateTemplate = () => {
                   <small>
                     Separate options with commas
                   </small>
+                </div>
+              )}
+              {field.type === "select" && (
+  <div className="form-group">
+    <label className="form-label">
+      Data Source
+    </label>
+
+    <select
+      className="form-select"
+      value={field.source}
+      onChange={(e) =>
+        handleFieldChange(
+          index,
+          "source",
+          e.target.value
+        )
+      }
+    >
+      {SELECT_SOURCES.map(
+        (source) => (
+          <option
+            key={source.value}
+            value={source.value}
+          >
+            {source.label}
+          </option>
+        )
+      )}
+    </select>
+  </div>
+)}
+              {field.type === "select" && field.source === "assignedClients" && (
+                <div className="form-group">
+                  <label className="form-label">Assigned Clients</label>
+                  <div className="card" style={{ padding: "8px" }}>
+                    {assignedClients.length > 0 ? (
+                      <div>{assignedClients.join(", ")}</div>
+                    ) : (
+                      <div style={{ color: "#6b7280" }}>No assigned clients for this role</div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
